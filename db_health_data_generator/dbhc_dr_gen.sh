@@ -45,7 +45,7 @@ cd ${main_dir}
 df -h >FS.txt
 
 # <--- CPU Utilization --->
-top >top.txt
+top -b -n 1 >top.txt
 
 # <--- Copy Alert Logs --->
 for db in ${db_arr[*]}; do
