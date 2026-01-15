@@ -8,7 +8,7 @@
 # <--- DATA VARIABLES --->
 timestamp=$(date +%Y%m%d)
 odb_version="19C"
-db_arr=(droprdb drrepdb drarcdb)
+instance_arr=(droprdb drrepdb drarcdb)
 
 # <--- PATHS AND DIRECTORIES --->
 #ORACLE_BASE: assumed to already be set
@@ -36,10 +36,10 @@ fi
 
 # <--- Directory Setup --->
 cd ${oracle_path}
-for db in ${db_arr[*]}; do
-    mkdir -p "${main_dir}/${db}"
+for instance in ${instance_arr[*]}; do
+    mkdir -p "${main_dir}/${instance}"
 done
-cd ${main_dir}
+cd "${oracle_path}/${main_dir}"
 
 # <--- FS Utilization --->
 df -h >FS.txt
@@ -48,9 +48,9 @@ df -h >FS.txt
 top -b -n 1 >top.txt
 
 # <--- Copy Alert Logs --->
-for db in ${db_arr[*]}; do
-    cp -p "${alert_log_path}/${db}/${db}/trace/alert_${db}.log" \
-        "${oracle_path}/${main_dir}/${db}"
+for instance in ${instance_arr[*]}; do
+    cp -p "${alert_log_path}/${instance}/${instance}/trace/alert_${instance}.log" \
+        "${oracle_path}/${main_dir}/${instance}"
 done
 
 # <--- Copy CRS Log --->
@@ -64,9 +64,7 @@ ${crsctl_path} stat res -t > crs.txt
 
 # <--- Get Status of Listener --->
 lsnrctl status > lstnr.txt
-
-# <--- Compression --->
-cd ..
+cd ${oracle_path}
 
 # <--- Sanity Check Logic --->
 if [ "${skip_check}" = false ]; then
