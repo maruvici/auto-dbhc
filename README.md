@@ -1,5 +1,5 @@
 # automated-db-health-checkup
-Scripts to automatically generate Oracle Database Health Checkup (DBHC) files and report. Created for SSI-PDS monthly health checkups.
+Scripts to automatically generate Oracle Database Health Checkup (DBHC) files. Created for SSI-PDS monthly health checkups.
 
 ## Usage
 ### DBHC Data Generation (PDS)
@@ -14,6 +14,3 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) files an
     - Add `--skip-check` to skip file checks
     - Specify Production Node number at script start
     - Requires manual creation of AWR HTML Report
-
-### DBHC Data Analysis and Report Generation (SSI)
-1. PLACEHOLDER
