@@ -1,0 +1,32 @@
+---
+title: "Oracle 19c Database Health Check Report"
+metadata-files: 
+  - _metadata.qmd
+format:
+  html:
+    css: styles.css
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-expand: 1
+    toc-location: right
+    embed-resources: true
+    page-layout: full
+    other-links:
+      - text: "PDF Version"
+        href: "dbhc_report.pdf"
+        icon: file-pdf
+execute:
+  echo: false
+  warning: false
+  out-width: 100%
+  fig-align: center
+---
+
+```{python}
+#| echo: false
+is_html = True
+is_pdf = False
+```
+
+{{< include _core_content.qmd >}}

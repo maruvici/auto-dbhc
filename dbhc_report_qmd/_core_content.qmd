@@ -1,0 +1,336 @@
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import sys
+from pathlib import Path
+from IPython.display import display, Markdown, Latex
+
+# --- CONFIGURATION ---
+if is_html:
+    try:
+        from itables import init_notebook_mode, options
+        init_notebook_mode(all_interactive=True)
+        options.maxColumns = 0        
+        options.scrollX = True        
+        options.dom = '<"top-row"lf>rt<"bottom-row"p>i'      
+        options.pageLength = -1       
+        options.classes = ["display", "nowrap", "cell-border", "compact"]
+        options.style = "width:100%; margin:auto;"
+    except ImportError:
+        pass
+else:
+    # --- PDF SETTINGS ---
+    pd.options.display.notebook_repr_html = False 
+    pd.options.display.max_rows = None
+    pd.options.display.max_columns = None
+    pd.options.display.max_colwidth = None
+
+# --- GRAPH SETTINGS ---
+plt.rcParams['figure.figsize'] = (10, 3.2) 
+plt.rcParams['figure.autolayout'] = True
+
+def smart_display(df):
+    if df is not None:
+        if is_html:
+            display(df)
+        else:
+            is_wide = len(df.columns) > 7
+            font_size = r"\footnotesize" if is_wide else r"\normalsize"
+            print(font_size)
+            
+            latex_string = df.to_latex(
+                escape=True, 
+                index=False, 
+                longtable=True,
+            )
+
+            adjusted_latex = latex_string.replace(
+                r'\begin{tabular}',
+                r'\begin{adjustbox}{max width=\textwidth}\begin{tabular}'
+            ).replace(
+                r'\end{tabular}',
+                r'\end{tabular}\end{adjustbox}'
+            )
+            print('\n' + adjusted_latex + '\n')
+            print(r"\normalsize")
+
+def load_data(filename):
+    path = curr_dir / filename
+    if path.exists():
+        return pd.read_csv(path)
+    return None
+
+def annotate_delta(x_pos, prev, curr):
+    delta = curr - prev
+    # Calculate percentage change and handle potential division by zero
+    percent = (delta / prev * 100) if prev != 0 else 0
+    arrow = "▲" if delta >= 0 else "▼"
+    
+    # Display the absolute change and the percentage growth/shrinkage 
+    plt.text(
+        x_pos,
+        max(prev, curr) * 1.05,
+        f"{arrow} {abs(delta):.2f} GB\n({percent:+.1f}%)",
+        ha="center",
+        fontweight="bold",
+        fontsize=9
+    )
+
+csv_dir = Path("../dbhc_csv")
+csv_subdirs = sorted([p for p in csv_dir.iterdir() if p.is_dir()])
+curr_dir = csv_subdirs[-1]
+instances = ["bancsarc", "bancsdb", "bancsrep"]
+db_data = {}
+for inst in instances:
+    db_data[inst] = {
+        "backup": load_data(f"backup_{inst}.csv"),
+        "control": load_data(f"controlfile_{inst}.csv"),
+        "cur_physical_size": load_data(f"db_size_physical_{inst}_cur.csv"),
+        "cur_logical_size": load_data(f"db_size_logical_{inst}_cur.csv"),
+        "data_guard": load_data(f"data_guard_{inst}.csv"),
+        "invalid_objects": load_data(f"invalid_objects_{inst}.csv"),
+        "prev_physical_size": load_data(f"db_size_physical_{inst}_prev.csv"),
+        "prev_logical_size": load_data(f"db_size_logical_{inst}_prev.csv"),
+        "sync": load_data(f"data_guard_{inst}.csv"),
+        "tablespace": load_data(f"tablespace_{inst}.csv"),
+    }
+```
+
+# Database Report
+
+## Database Size Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    
+    prev_phys = db_data[inst]['prev_physical_size'].iloc[0, 0]
+    cur_phys  = db_data[inst]['cur_physical_size'].iloc[0, 0]
+    prev_log  = db_data[inst]['prev_logical_size'].iloc[0, 0]
+    cur_log   = db_data[inst]['cur_logical_size'].iloc[0, 0]
+
+    labels = ["Physical Size", "Logical Size"]
+    prev_vals = [prev_phys, prev_log]
+    curr_vals = [cur_phys, cur_log]
+    x = np.arange(len(labels))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(7.5, 4.5))
+    ax.bar(x - width/2, prev_vals, width, label="Previous", color="#3498db")
+    ax.bar(x + width/2, curr_vals, width, label="Current", color="#2ecc71")
+
+    for i, v in enumerate(prev_vals):
+        ax.text(i - width/2, v, f"{v:.1f}G", ha="center", va="bottom")
+    for i, v in enumerate(curr_vals):
+        ax.text(i + width/2, v, f"{v:.1f}G", ha="center", va="bottom")
+
+    annotate_delta(x[0], prev_phys, cur_phys)
+    annotate_delta(x[1], prev_log, cur_log)
+
+    ax.set_ylabel("Size (GB)")
+    ax.set_title(f"Database Size Analysis: {inst.upper()}")
+    ax.set_xticks(x, labels)
+    ax.legend()
+    
+    ax.set_ylim(0, max(prev_vals + curr_vals) * 1.4) 
+    
+    plt.tight_layout()
+    plt.show()
+    
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-note}
+## Findings and Recommendations
+This is the content of the Data Size Report
+:::
+
+## Tablespace Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[inst]['tablespace'] is not None:
+        df = db_data[inst]['tablespace']
+        smart_display(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-tip}
+## Findings and Recommendations
+This is the content of the Table Size Report
+:::
+
+## Control File Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[inst]['control'] is not None:
+        df = db_data[inst]['control']
+        smart_display(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-warning}
+## Findings and Recommendations
+This is the content of the Control File Report
+:::
+
+## RMAN Backup Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[inst]['backup'] is not None:
+        df = db_data[inst]['backup']
+        smart_display(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-caution}
+## Findings and Recommendations
+This is the content of the RMAN Backup Report
+:::
+
+## Data Guard Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[inst]['data_guard'] is not None:
+        df = db_data[inst]['data_guard']
+        smart_display(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the Data Guard Report
+:::
+
+## Invalid Object Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[inst]['invalid_objects'] is not None:
+        df = db_data[inst]['invalid_objects']
+        smart_display(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the Invalid Objects Report
+:::
+
+## Log Switch Status
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if inst == "bancsarc":
+        df = pd.read_csv(curr_dir / "archiving_instance_archivelogswitch_19c.csv")
+    elif inst == "bancsdb":
+        df = pd.read_csv(curr_dir / "operating_instance_archivelogswitch_19c.csv")
+    elif inst == "bancsrep":
+        df = pd.read_csv(curr_dir / "reporting_instance_archivelogswitch_19c.csv")
+    else:
+        df = None
+    if df is not None:
+        smart_display(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the Log Switch Status Report
+:::
+
+# Server Details Report
+
+## ASM Storage Status
+
+```{python}
+#| output: asis
+df = pd.read_csv(curr_dir / "asm.csv")
+if df is not None:
+    smart_display(df)
+```
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the ASM Report
+:::
+
+## File System Utilization Status
+
+```{python}
+#| output: asis
+df = pd.read_csv(curr_dir / "asm.csv")
+if df is not None:
+    smart_display(df)
+```
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the ASM Report
+:::
+
+## Cluster Resource Status
+
+```{python}
+#| output: asis
+df = pd.read_csv(curr_dir / "asm.csv")
+if df is not None:
+    smart_display(df)
+```
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the ASM Report
+:::
+
+## Listener Status
+
+```{python}
+#| output: asis
+df = pd.read_csv(curr_dir / "asm.csv")
+if df is not None:
+    smart_display(df)
+```
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the ASM Report
+:::

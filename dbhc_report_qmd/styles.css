@@ -1,0 +1,62 @@
+/* 1. Center the Main Table Container */
+.dataTables_wrapper {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    width: 95% !important;  /* Centers it nicely with slight breathing room */
+}
+
+/* 2. Ensure the table itself fills that container */
+table.dataTable {
+    margin: 0 auto !important;
+    width: 100% !important;
+}
+
+/* 3. Handle Overflow (Scrollbar) nicely */
+.itables {
+    overflow-x: auto;
+    display: block;
+    margin: 0 auto !important;
+    width: 100%;
+}
+
+/* 4. Fix Graph/Plot Centering */
+.cell-output-display img {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* 5. PDF/Print Friendly tweaks */
+@media print {
+    .dataTables_wrapper {
+        width: 100% !important;
+    }
+}
+
+.top-row {
+    display: flex;
+    justify-content: space-between; /* Pushes 'l' to left and 'f' to right */
+    align-items: center;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.bottom-row {
+    display: flex;
+    justify-content: center; /* Centers the page buttons */
+    margin-top: 15px;
+    width: 100%;
+}
+
+.dataTables_info {
+    text-align: center;
+    margin-top: 5px;
+    color: #666;
+}
+
+.dataTables_filter input {
+    margin-left: 0.5em;
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
