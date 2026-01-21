@@ -5,8 +5,22 @@
 # ==========================================
 # ADJUST THESE VALUES AS NECESSARY BEFORE RUNNING
 
+# <-- HANDLE OPTIONS -->
+skip_check=false
+while getopts "sn:" opt; do
+  case $opt in
+    s) skip_check=true ;;
+    n) node_num="$OPTARG" ;;
+    *) exit 1 ;;
+  esac
+done
+
 # <--- DATA VARIABLES --->
-read -p "Production Node Number:" node_num
+# <--- SHARED VARIABLES --->
+timestamp=$(date +%Y%m%d)
+odb_version="19C"
+
+# <--- PROD-SPECIFIC VARIABLES --->
 instance_arr=( {bancsarc,bancsdb,bancsrep}"${node_num}" )
 
 # <--- NODES TO BE SKIPPED --->
@@ -14,19 +28,20 @@ crs_skip=(2)
 sql_check_skip=(2)
 
 # <--- PATHS AND DIRECTORIES --->
+# <--- SHARED PATHS --->
+oracle_path="/home/oracle"
+main_dir="${oracle_path}/${timestamp}_healthcheck_${odb_version}"
+alert_log_path="${ORACLE_BASE}/diag/rdbms"
+crsctl_path="/u01/app/19.0.0/grid/bin/crsctl"
+
+# <--- PROD-SPECIFIC PATHS --->
 #ORACLE_BASE: assumed to already be set
 node_dir="${main_dir}/NODE${node_num}"
 crs_log_path="/u01/app/grid/diag/crs/pdsbancsv6db${node_num}p/crs/trace"
 asm_log_path="/u01/app/grid/diag/asm/+asm/+ASM${node_num}/trace"
-hc_all_nodes_path="./hc_all_nodes.sql"
-hc_specific_nodes_path="./hc_specific_nodes.sql"
-hc_global_report_path="./hc_global_reports.sql"
-
-# <--- ENABLING SANITY CHECK --->
-skip_check=false
-if [[ "$1" == "--skip-check" ]]; then
-    skip_check=true
-fi
+hc_all_nodes_path="auto-dbhc-collector/hc_all_nodes.sql"
+hc_specific_nodes_path="auto-dbhc-collector/hc_specific_nodes.sql"
+hc_global_report_path="auto-dbhc-collector/hc_global_reports.sql"
 
 # Some Notes About Script Variables
 # - timestamp was previously +"%d%^b%Y"
@@ -79,7 +94,7 @@ for instance in ${instance_arr[*]}; do
 
     export ORACLE_SID="${instance}"
 
-    cd "${node_dir}"
+    cd "${main_dir}"
     sqlplus -s / as sysdba "@${oracle_path}/${hc_global_report_path}"
     
     cd "${node_dir}/${instance}"
@@ -113,7 +128,7 @@ if [ "${skip_check}" = false ]; then
     done
 
     while true; do
-        read -p "Does the outputs look correct? [Y/N]: " sanity_check
+        read -p "Do the outputs look correct? [Y/N]: " sanity_check
         case "${sanity_check}" in
             [yY] | [yY][eE][sS])
                 echo "Validation successful."

@@ -5,20 +5,35 @@
 # ==========================================
 # ADJUST THESE VALUES AS NECESSARY BEFORE RUNNING
 
+# <-- HANDLE OPTIONS -->
+skip_check=false
+while getopts "sn:" opt; do
+  case $opt in
+    s) skip_check=true ;;
+    *) exit 1 ;;
+  esac
+done
+
 # <--- DATA VARIABLES --->
+# <--- SHARED VARIABLES --->
+timestamp=$(date +%Y%m%d)
+odb_version="19C"
+
+# <--- DR-SPECIFIC VARIABLES --->
 instance_arr=(droprdb drrepdb drarcdb)
 
 # <--- PATHS AND DIRECTORIES --->
 #ORACLE_BASE: assumed to already be set
+# <--- SHARED PATHS --->
+oracle_path="/home/oracle"
+main_dir="${oracle_path}/${timestamp}_healthcheck_${odb_version}"
+alert_log_path="${ORACLE_BASE}/diag/rdbms"
+crsctl_path="/u01/app/19.0.0/grid/bin/crsctl"
+
+# <--- DR-SPECIFIC PATHS --->
 dr_dir="${main_dir}/DR"
 crs_log_path="/u01/app/grid/diag/crs/pdsbancsv6db1d/crs/trace"
 asm_log_path="/u01/app/grid/diag/asm/+asm/+ASM/trace"
-
-# <--- ENABLING SANITY CHECK --->
-skip_check=false
-if [[ "$1" == "--skip-check" ]]; then
-    skip_check=true
-fi
 
 # Some Notes About Script Variables
 # - timestamp was previously +"%d%^b%Y"
@@ -75,7 +90,7 @@ if [ "${skip_check}" = false ]; then
     done
 
     while true; do
-        read -p "Does the outputs look correct? [Y/N]: " sanity_check
+        read -p "Do the outputs look correct? [Y/N]: " sanity_check
         case "${sanity_check}" in
             [yY] | [yY][eE][sS])
                 echo "Validation successful."

@@ -5,15 +5,17 @@
 # ==========================================
 # ADJUST THESE VALUES AS NECESSARY BEFORE RUNNING
 
+# TO MAKE MAINTENANCE EASIER, SHARED VARIABLES AND PATHS
+# IN THE CHILDREN SCRIPTS CAN BE DEFINED HERE AS
+# EXPORTED VARIABLES.
+
 # <--- DATA VARIABLES --->
-export timestamp=$(date +%Y%m%d)
-export odb_version="19C"
+timestamp=$(date +%Y%m%d)
+odb_version="19C"
 
 # <--- PATHS AND DIRECTORIES --->
-export oracle_path="/home/oracle"
-export main_dir="${oracle_path}/${timestamp}_healthcheck_${odb_version}"
-export alert_log_path="${ORACLE_BASE}/diag/rdbms"
-export crsctl_path="/u01/app/19.0.0/grid/bin/crsctl"
+oracle_path="/home/oracle"
+main_dir="${oracle_path}/${timestamp}_healthcheck_${odb_version}"
 usr_path="/home/pdskdineros_dba"
 
 # <--- ENABLING SANITY CHECK --->
@@ -28,13 +30,13 @@ fi
 
 # <--- Script Calls --->
 if [[ ${skip_check} == "true" ]]; then
-    bash dbhc_dr_collector.sh --skip-check
-    bash dbhc_prod_collector.sh --skip-check # For Node 1
-    bash dbhc_prod_collector.sh --skip-check # For Node 2
+    bash dbhc_dr_collector.sh -s
+    bash dbhc_prod_collector.sh -s -n 1 # For Node 1
+    bash dbhc_prod_collector.sh -s -n 2 # For Node 2
 else
     bash dbhc_dr_collector.sh
-    bash dbhc_prod_collector.sh
-    bash dbhc_prod_collector.sh 
+    bash dbhc_prod_collector.sh -n 1
+    bash dbhc_prod_collector.sh -n 2
 fi
 
 # <--- Archiving Check --->
