@@ -6,19 +6,13 @@
 # ADJUST THESE VALUES AS NECESSARY BEFORE RUNNING
 
 # <--- DATA VARIABLES --->
-timestamp=$(date +%Y%m%d)
-odb_version="19C"
 instance_arr=(droprdb drrepdb drarcdb)
 
 # <--- PATHS AND DIRECTORIES --->
 #ORACLE_BASE: assumed to already be set
-oracle_path="/home/oracle"
-main_dir="${timestamp}_healthcheck_DR_${odb_version}"
-alert_log_path="${ORACLE_BASE}/diag/rdbms"
+dr_dir="${main_dir}/DR"
 crs_log_path="/u01/app/grid/diag/crs/pdsbancsv6db1d/crs/trace"
 asm_log_path="/u01/app/grid/diag/asm/+asm/+ASM/trace"
-crsctl_path="/u01/app/19.0.0/grid/bin/crsctl"
-usr_path="/home/pdskdineros_dba"
 
 # <--- ENABLING SANITY CHECK --->
 skip_check=false
@@ -37,9 +31,9 @@ fi
 # <--- Directory Setup --->
 cd ${oracle_path}
 for instance in ${instance_arr[*]}; do
-    mkdir -p "${main_dir}/${instance}"
+    mkdir -p "${dr_dir}/${instance}"
 done
-cd "${oracle_path}/${main_dir}"
+cd "${dr_dir}"
 
 # <--- FS Utilization --->
 df -h >FS.txt
@@ -50,14 +44,14 @@ top -b -n 1 >top.txt
 # <--- Copy Alert Logs --->
 for instance in ${instance_arr[*]}; do
     cp -p "${alert_log_path}/${instance}/${instance}/trace/alert_${instance}.log" \
-        "${oracle_path}/${main_dir}/${instance}"
+        "${dr_dir}/${instance}"
 done
 
 # <--- Copy CRS Log --->
-cp -p "${crs_log_path}/alert.log" "${oracle_path}/${main_dir}/crs_alert.log"
+cp -p "${crs_log_path}/alert.log" "${dr_dir}/crs_alert.log"
 
 # <--- Copy ASM Log --->
-cp -p "${asm_log_path}/alert_+ASM.log" "${oracle_path}/${main_dir}/asm_alert.log"
+cp -p "${asm_log_path}/alert_+ASM.log" "${dr_dir}/asm_alert.log"
 
 # <--- Get Status of CRS Resources --->
 ${crsctl_path} stat res -t > crs.txt
@@ -69,10 +63,10 @@ cd ${oracle_path}
 # <--- Sanity Check Logic --->
 if [ "${skip_check}" = false ]; then
     echo "--- DIRECTORY TREE ---"
-    ls -ltrh ${main_dir}
+    ls -ltrh ${dr_dir}
     
     echo -e "\n--- FILE CONTENTS ---"
-    find "${main_dir}" -type f \( -name "*.txt" -o -name "*.log" \) | while read -r file; do
+    find "${dr_dir}" -type f \( -name "*.txt" -o -name "*.log" \) | while read -r file; do
         echo "--------------------------------------------------"
         echo "FILE: $file"
         echo "--------------------------------------------------"
@@ -81,14 +75,15 @@ if [ "${skip_check}" = false ]; then
     done
 
     while true; do
-        read -p "Does the outputs look correct? Proceed to compress? [Y/N]: " sanity_check
+        read -p "Does the outputs look correct? [Y/N]: " sanity_check
         case "${sanity_check}" in
             [yY] | [yY][eE][sS])
-                echo "Validation successful. Proceeding to compress..."
+                echo "Validation successful."
                 break 
                 ;;
             [nN] | [nN][oO])
                 echo "Task cancelled by user."
+                rm -rf "${dr_dir}"
                 exit 1
                 ;;
             *)
@@ -99,9 +94,3 @@ if [ "${skip_check}" = false ]; then
 else
     echo "Skipping sanity check as requested."
 fi
-
-# <--- tar Archiving --->
-tar -czvf "${main_dir}.tar.gz" ${main_dir}
-
-# <--- Move tar File --->
-mv ${oracle_path}/${main_dir}.tar.gz ${usr_path}
