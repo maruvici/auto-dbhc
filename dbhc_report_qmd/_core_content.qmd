@@ -31,7 +31,7 @@ else:
 plt.rcParams['figure.figsize'] = (10, 3.2) 
 plt.rcParams['figure.autolayout'] = True
 
-# --- DISPLAY FUNCTIONS ---
+# --- HELPER FUNCTIONS ---
 def smart_display(df):
     if df is not None:
         if is_html:
@@ -120,12 +120,24 @@ def annotate_delta(x_pos, prev, curr):
         fontsize=9
     )
 
+def calc_growth(inst, mode="physical"):
+    curr = db_data[inst][f'cur_{mode}_size'].iloc[0, 0]
+    prev = db_data[inst][f'prev_{mode}_size'].iloc[0, 0]
+    pct = ((curr - prev) / prev * 100) if prev != 0 else 0
+    return f"{abs(pct):.2f}% {'Increase' if pct >= 0 else 'Decrease'}"
+
+# --- DATA INITIALIZATION ---
 csv_dir = Path("../dbhc_csv")
 csv_subdirs = sorted([p for p in csv_dir.iterdir() if p.is_dir()])
 curr_dir = csv_subdirs[-1]
 instances = ["bancsarc", "bancsdb", "bancsrep"]
 servers = ["DR", "NODE1", "NODE2"]
+sections = ["DB SIZE", "TABLESPACE", "BACKUP", "DATA GUARD", "LOG SWITCH", "ASM", "FS", "CRS", "LISTENER"]
+tablespace_threshold = 80
+asm_threshold = 80
+fs_threshold = 70
 db_data = {}
+
 # Database/Instance Details
 for inst in instances:
     db_data[inst] = {
@@ -140,6 +152,7 @@ for inst in instances:
         "sync": load_data(f"data_guard_{inst}.csv"),
         "tablespace": load_data(f"tablespace_{inst}.csv"),
     }
+
 # Server Details
 for server in servers:
     db_data[server] = {
@@ -158,6 +171,110 @@ for server in servers:
             }
 ```
 
+# Executive Summary
+
+::: {.panel-tabset}
+```{python}
+#| output: asis
+for sec in sections:
+    display(Markdown(f"## {sec.upper()}"))
+
+    match sec:
+        case "DB SIZE":
+            for inst in instances:
+                phys = calc_growth(inst, "physical")
+                log = calc_growth(inst, "logical")
+                display(Markdown(f"- **{inst.upper()}**: Trend: **{phys}** Physical Size | **{log}** Logical Size vs Previous."))
+        case "TABLESPACE":
+            for inst in instances:
+                try:
+                    df = db_data[inst]["tablespace"]
+                    tablespace_names = df.columns[0]
+                    usage_pct = df.columns[-1]
+                    results = df.loc[df[usage_pct] > tablespace_threshold, tablespace_names]
+
+                    if len(results) > 0:
+                        tablespace_status = f"{", ".join(results)} is/are above {tablespace_threshold}% usage"
+                    else:
+                        tablespace_status = "Tablespaces are at a good level"
+                except Exception:
+                    tablespace_status = "No tablespaces detected"
+                display(Markdown(f"- **{inst.upper()}**: {tablespace_status}."))
+        case "BACKUP":
+            for inst in instances:
+                try:
+                    df = db_data[inst]["backup"]
+                    backup_status = df.columns[-4]
+                    backup_start_time = df.columns[0]
+                    results = df.loc[df[backup_status] != "COMPLETED", backup_start_time]
+
+                    if len(results) > 0:
+                        backup_status = f"Backups started on {", ".join(results)} is/are incomplete"
+                    else:
+                        backup_status = "All backups on report are completed"
+                except Exception:
+                    backup_status = "No backups detected"
+                display(Markdown(f"- **{inst.upper()}**: {backup_status}."))
+        case "DATA GUARD":
+            for inst in instances:
+                try:
+                    df = db_data[inst]["data_guard"]
+                    thread_num = df.columns[1]
+                    primary_seq = df.columns[2]
+                    standby_seq = df.columns[3]
+                    results = df.loc[df[primary_seq] != df[standby_seq], thread_num]
+
+                    if len(results) > 0:
+                        dg_status = f"Primary and standby in thread/s {", ".join(results)} is/are out-of-sync"
+                    else:
+                        dg_status = "Primary and standby are in-sync"
+                except Exception:
+                    dg_status = "No data guards detected"
+                display(Markdown(f"- **{inst.upper()}**: {dg_status}."))
+        case "LOG SWITCH":
+            for inst in instances:
+                log_switch_status = "test"
+                display(Markdown(f"- **{inst.upper()}**: {log_switch_status}."))
+        case "ASM":
+            for inst in instances:
+                try:
+                    df = pd.read_csv(curr_dir / "asm.csv")
+                    asm_name = df.columns[0]
+                    usage_pct = df.columns[-1]
+                    results = df.loc[df[usage_pct] > asm_threshold, asm_name]
+
+                    if len(results) > 0:
+                        asm_status = f"Diskgroup {", ".join(results)} is/are above {asm_threshold}% usage"
+                    else:
+                        asm_status = f"All diskgroups are below {asm_threshold}% usage"
+                except Exception:
+                    asm_status = "No ASM detected"
+                display(Markdown(f"- **{inst.upper()}**: {asm_status}."))
+        case "FS":
+            for server in servers:
+                try:
+                    df = db_data[server]["fs"]
+                    fs_name = df.columns[0]
+                    usage_pct = df.columns[-2]
+                    results = df.loc[df[usage_pct].str.strip('%').astype(int) > fs_threshold, fs_name]
+
+                    if len(results) > 0:
+                        fs_status = f"Filesystem {", ".join(results)} is/are above {fs_threshold}% usage"
+                    else:
+                        fs_status = f"All mounts are below {fs_threshold}% usage"
+                except Exception:
+                    fs_status = "No filesystems detected"
+                display(Markdown(f"- **{server.upper()}**: {fs_status}."))
+        case "CRS":
+            for inst in instances:
+                print("test")
+        case "LISTENER":
+            for inst in instances:
+                print("test")
+    
+    display(Markdown(f" "))
+```
+:::
 
 # Database Report
 
