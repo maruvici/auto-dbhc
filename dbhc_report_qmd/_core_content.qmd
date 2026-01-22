@@ -82,6 +82,7 @@ csv_dir = Path("../dbhc_csv")
 csv_subdirs = sorted([p for p in csv_dir.iterdir() if p.is_dir()])
 curr_dir = csv_subdirs[-1]
 instances = ["bancsarc", "bancsdb", "bancsrep"]
+servers = ["DR", "NODE1", "NODE2"]
 db_data = {}
 for inst in instances:
     db_data[inst] = {
@@ -96,7 +97,16 @@ for inst in instances:
         "sync": load_data(f"data_guard_{inst}.csv"),
         "tablespace": load_data(f"tablespace_{inst}.csv"),
     }
+for server in servers:
+    db_data[server] = {
+        "fs": load_data(f"fs_util_{server}.csv"),
+        "lstnr": load_data(f"lstnr_{server}.csv"),
+    }
+    if server != "NODE2":
+        db_data[server]["crs"] = load_data(f"crs_{server}.csv")
+    
 ```
+
 
 # Database Report
 
@@ -295,42 +305,56 @@ This is the content of the ASM Report
 
 ## File System Utilization Status
 
+::: {.panel-tabset}
 ```{python}
 #| output: asis
-df = pd.read_csv(curr_dir / "asm.csv")
-if df is not None:
-    smart_display(df)
+for server in servers:
+    display(Markdown(f"### {server.upper()}"))
+    if db_data[server]['fs'] is not None:
+        df = db_data[server]['fs']
+        smart_display(df)
+    display(Markdown(f" "))
 ```
+:::
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the ASM Report
+This is the content of the FS Utilization Report
 :::
 
 ## Cluster Resource Status
-
+::: {.panel-tabset}
 ```{python}
 #| output: asis
-df = pd.read_csv(curr_dir / "asm.csv")
-if df is not None:
-    smart_display(df)
+for server in servers:
+    if server != "NODE2":
+        display(Markdown(f"### {server.upper()}"))
+        if db_data[server]['crs'] is not None:
+            df = db_data[server]['crs']
+            smart_display(df)
+        display(Markdown(f" "))
 ```
+:::
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the ASM Report
+This is the content of the CRS Report
 :::
 
 ## Listener Status
-
+::: {.panel-tabset}
 ```{python}
 #| output: asis
-df = pd.read_csv(curr_dir / "asm.csv")
-if df is not None:
-    smart_display(df)
+for server in servers:
+    display(Markdown(f"### {server.upper()}"))
+    if db_data[server]['lstnr'] is not None:
+        df = db_data[server]['lstnr']
+        smart_display(df)
+    display(Markdown(f" "))
 ```
+:::
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the ASM Report
+This is the content of the Listener Status Report
 :::
