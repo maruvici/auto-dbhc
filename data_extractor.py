@@ -326,7 +326,67 @@ def parse_lstnr_file(file: Path) -> Optional[pd.DataFrame]:
         df[key] = value
 
     return df
-    
+
+def parse_awrrpt_file(file: Path) -> Optional[pd.DataFrame]:
+    """
+    Parses AWR HTML by targeting specific table summary attributes.
+    """
+    if not file.exists():
+        return None
+
+    try:
+        with open(file, 'r', encoding='utf-8') as f:
+            soup = BeautifulSoup(f, 'html.parser')
+
+        all_data = []
+
+        # 1 & 2: Database Instance Info (Two tables share this summary)
+        db_info_tables = soup.find_all('table', {'summary': "This table displays database instance information"})
+        for table in db_info_tables:
+            for row in table.find_all('tr'):
+                cols = [ele.get_text(strip=True) for ele in row.find_all(['td', 'th'])]
+                if cols: all_data.append(cols)
+            all_data.append([]) # Spacer
+
+        # 3: Host Information
+        host_table = soup.find('table', {'summary': "This table displays host information"})
+        if host_table:
+            for row in host_table.find_all('tr'):
+                cols = [ele.get_text(strip=True) for ele in row.find_all(['td', 'th'])]
+                if cols: all_data.append(cols)
+            all_data.append([]) # Spacer
+
+        # 4: Snapshot Information
+        snap_table = soup.find('table', {'summary': "This table displays snapshot information"})
+        if snap_table:
+            for row in snap_table.find_all('tr'):
+                cols = [ele.get_text(strip=True) for ele in row.find_all(['td', 'th'])]
+                if cols: all_data.append(cols)
+        
+        # Insert requested section header between table 4 and 5
+        all_data.append([]) # Spacer
+        all_data.append(["Instance Efficiency Percentages (Target 100%)"])
+
+        # 5: Instance Efficiency Percentages
+        eff_table = soup.find('table', {'summary': "This table displays instance efficiency percentages"})
+        if eff_table:
+            for row in eff_table.find_all('tr'):
+                cols = [ele.get_text(strip=True) for ele in row.find_all(['td', 'th'])]
+                if cols: all_data.append(cols)
+
+        if not all_data:
+            return None
+
+        # Standardize row lengths for Pandas
+        max_cols = max(len(r) for r in all_data)
+        padded_data = [r + [""] * (max_cols - len(r)) for r in all_data]
+        
+        return pd.DataFrame(padded_data)
+
+    except Exception as e:
+        print(f"Error parsing AWR: {e}")
+        return None
+
 def run_etl():
     """
     Main function to process all defined files.
@@ -386,15 +446,19 @@ def run_etl():
         files_map[curr_dir / f"{server}" / "FS.txt" ] = csv_dir / f"fs_util_{server}.csv"
         files_map[curr_dir / f"{server}" / "lstnr.txt" ] = csv_dir / f"lstnr_{server}.csv"
 
-    # # AWRRPT Reports (Not Yet Parseable)
-    # for server in server_arr:
-    #     for instance in instance_arr:
-    #         files_map[f"{server}_{instance}"] = csv_dir / f"awrrpt_{server}_{instance}.csv"
-    
-    # AWR Report (Not Yet Parseable)
-    # for i in range(1,3):
-    #     for instance in instance_arr:
-    #         files_map[curr_dir / f"NODE{i}" / f"{instance}{i}" / awrrpt_{i}] = csv_dir / f"awr_{instance}{i}"
+    # AWRRPT Reports (Not Yet Parseable)
+    for i in range(1, 3):
+        current_node = f"NODE{i}"
+        for instance in instance_arr:
+            target_dir = curr_dir / current_node / f"{instance}{i}"
+            # Find all awrrpt in target_dir
+            matching_files = list(target_dir.glob(f"awrrpt_{i}_*.html"))  
+            if matching_files:
+                # Take the first match found
+                actual_file = matching_files[0]
+                files_map[actual_file] = csv_dir / f"awrrpt_{current_node}_{instance}.csv"
+            else:
+                print(f"No AWRRPT.html file found in {target_dir}")
 
     print("--- Starting ETL Process ---")
     for input_file, output_csv in files_map.items():
@@ -406,8 +470,8 @@ def run_etl():
             df = parse_fs_file(input_file)
         elif re.search(f"lstnr", str(output_csv)):
             df = parse_lstnr_file(input_file)
-        # elif re.search(f"awrrpt", str(output_csv)):
-        #     df = parse_awrrpt_file(input_file)
+        elif re.search(f"awrrpt", str(output_csv)):
+            df = parse_awrrpt_file(input_file)
         else:
             df = parse_spool_file(input_file)
         

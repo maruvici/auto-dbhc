@@ -31,6 +31,7 @@ else:
 plt.rcParams['figure.figsize'] = (10, 3.2) 
 plt.rcParams['figure.autolayout'] = True
 
+# --- DISPLAY FUNCTIONS ---
 def smart_display(df):
     if df is not None:
         if is_html:
@@ -55,6 +56,47 @@ def smart_display(df):
             )
             print('\n' + adjusted_latex + '\n')
             print(r"\normalsize")
+
+def display_split_tables(df):
+    if df is None or df.empty:
+        return
+
+    # If the first row of headers are just strings of numbers, we drop them
+    if all(str(col).isdigit() for col in df.columns):
+        df.columns = range(len(df.columns)) 
+        
+    is_empty = df.apply(lambda x: x.astype(str).str.strip().replace('nan', '').eq('').all(), axis=1)
+    
+    # Group consecutive non-empty rows into single blocks
+    blocks = []
+    current_block = []
+    
+    for i, row_is_empty in enumerate(is_empty):
+        if not row_is_empty:
+            current_block.append(df.iloc[i])
+        else:
+            if current_block:
+                blocks.append(pd.DataFrame(current_block))
+                current_block = []
+    if current_block: # Catch the last block
+        blocks.append(pd.DataFrame(current_block))
+
+    for block in blocks:
+        block = block.replace('', np.nan).dropna(axis=1, how='all').fillna('')
+        
+        if block.empty or len(block.columns) == 0:
+            continue
+
+        # Check for Title Rows
+        row_content = [str(c).strip() for c in block.iloc[0] if str(c).strip() and str(c).strip() != 'nan']
+        
+        if len(block) == 1 and len(row_content) == 1:
+            display(Markdown(f"#### {row_content[0]}"))
+        else:
+            # Display as a single cohesive table
+            smart_display(block)
+        
+        display(Markdown("<br>"))
 
 def load_data(filename):
     path = curr_dir / filename
@@ -84,6 +126,7 @@ curr_dir = csv_subdirs[-1]
 instances = ["bancsarc", "bancsdb", "bancsrep"]
 servers = ["DR", "NODE1", "NODE2"]
 db_data = {}
+# Database/Instance Details
 for inst in instances:
     db_data[inst] = {
         "backup": load_data(f"backup_{inst}.csv"),
@@ -97,6 +140,7 @@ for inst in instances:
         "sync": load_data(f"data_guard_{inst}.csv"),
         "tablespace": load_data(f"tablespace_{inst}.csv"),
     }
+# Server Details
 for server in servers:
     db_data[server] = {
         "fs": load_data(f"fs_util_{server}.csv"),
@@ -104,7 +148,14 @@ for server in servers:
     }
     if server != "NODE2":
         db_data[server]["crs"] = load_data(f"crs_{server}.csv")
-    
+
+# AWR Details
+for server in servers:
+    for inst in instances:
+        if server != "DR":
+            db_data[f"{server}_{inst}"] = { 
+                "awrrpt": load_data(f"awrrpt_{server}_{inst}.csv")
+            }
 ```
 
 
@@ -357,4 +408,43 @@ for server in servers:
 ::: {.callout-important}
 ## Findings and Recommendations
 This is the content of the Listener Status Report
+:::
+
+# AWR Report 
+
+## NODE 1 AWR Report
+::: {.panel-tabset}
+```{python}
+#| output: asis
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[f"NODE1_{inst}"]['awrrpt'] is not None:
+        df = db_data[f"NODE1_{inst}"]['awrrpt']
+        display_split_tables(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the AWR Report for Node 1
+:::
+
+
+## NODE 2 AWR Report
+::: {.panel-tabset}
+```{python}
+#| output: asis
+for inst in instances:
+    display(Markdown(f"### {inst.upper()}"))
+    if db_data[f"NODE2_{inst}"]['awrrpt'] is not None:
+        df = db_data[f"NODE2_{inst}"]['awrrpt']
+        display_split_tables(df)
+    display(Markdown(f" "))
+```
+:::
+
+::: {.callout-important}
+## Findings and Recommendations
+This is the content of the AWR Report for Node 1
 :::
