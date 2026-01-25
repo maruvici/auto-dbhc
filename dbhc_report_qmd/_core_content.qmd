@@ -1,6 +1,8 @@
 ```{python}
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.colors import Normalize, to_hex, LinearSegmentedColormap
 import numpy as np
 import os
 import sys
@@ -12,6 +14,7 @@ if is_html:
     try:
         from itables import init_notebook_mode, options
         init_notebook_mode(all_interactive=True)
+        options.allow_html = True
         options.maxColumns = 0        
         options.scrollX = True        
         options.dom = '<"top-row"lf>rt<"bottom-row"p>i'      
@@ -32,10 +35,13 @@ plt.rcParams['figure.figsize'] = (10, 3.2)
 plt.rcParams['figure.autolayout'] = True
 
 # --- HELPER FUNCTIONS ---
-def smart_display(df):
+def smart_display(df, styler=None):
     if df is not None:
         if is_html:
-            display(df)
+            if styler is not None:
+                display(styler)
+            else:
+                display(df)
         else:
             is_wide = len(df.columns) > 7
             font_size = r"\footnotesize" if is_wide else r"\normalsize"
@@ -58,6 +64,10 @@ def smart_display(df):
             print(r"\normalsize")
 
 def display_split_tables(df):
+    """
+    Splits tables with empty rows to multiple
+    mini tables
+    """
     if df is None or df.empty:
         return
 
@@ -98,6 +108,40 @@ def display_split_tables(df):
         
         display(Markdown("<br>"))
 
+def _rgb(val, vmin, vmax):
+    r, g, b, _ = _CMAP(Normalize(vmin, vmax, clip=True)(val))
+    return r, g, b
+
+def gradient_style(df, cols, html=True):
+    vmin = df[cols].min().min()
+    vmax = df[cols].max().max()
+    norm = Normalize(vmin, vmax, clip=True)
+
+    if html:
+        def css(val):
+            r, g, b, _ = _CMAP(norm(val))
+            return f"background-color: {to_hex((r, g, b))}"
+
+        return (
+            df.style
+              .apply(lambda s: [css(v) for v in s], subset=cols)
+              .format(precision=2)
+        )
+
+    # PDF path
+    df_pdf = df.copy()
+    for col in cols:
+        df_pdf[col] = df_pdf[col].apply(
+            lambda v: (
+                f"\\cellcolor[rgb]{{"
+                f"{_CMAP(norm(v))[0]:.3f},"
+                f"{_CMAP(norm(v))[1]:.3f},"
+                f"{_CMAP(norm(v))[2]:.3f}}}"
+                f"{v:.2f}"
+            )
+        )
+    return df_pdf
+
 def load_data(filename):
     path = curr_dir / filename
     if path.exists():
@@ -137,6 +181,11 @@ tablespace_threshold = 80
 asm_threshold = 80
 fs_threshold = 70
 db_data = {}
+# Controls color formatting in styled tables
+_CMAP = LinearSegmentedColormap.from_list(
+    "pastel_green_yellow_red",
+    ["#b9f8beff", "#fff7a3ff", "#ffb3abff"]  # light green → cream → light red
+)
 
 # Database/Instance Details
 for inst in instances:
@@ -184,7 +233,11 @@ for sec in sections:
             for inst in instances:
                 phys = calc_growth(inst, "physical")
                 log = calc_growth(inst, "logical")
-                display(Markdown(f"- **{inst.upper()}**: Trend: **{phys}** Physical Size | **{log}** Logical Size vs Previous."))
+                display(Markdown(
+                    f"- **{inst.upper()}**:\n"
+                    f"    - **{phys}** Physical Size vs Previous Month\n"
+                    f"    - **{log}** Logical Size vs Previous Month"
+                    ))
         case "TABLESPACE":
             for inst in instances:
                 try:
@@ -338,7 +391,12 @@ for inst in instances:
     display(Markdown(f"### {inst.upper()}"))
     if db_data[inst]['tablespace'] is not None:
         df = db_data[inst]['tablespace']
-        smart_display(df)
+        usage_pct = df.columns[-1]
+        styled_df = gradient_style(df, cols=[usage_pct], html=is_html)
+        if is_html:
+            smart_display(df, styler=styled_df)
+        else:
+            smart_display(styled_df)
     display(Markdown(f" "))
 ```
 :::
@@ -445,7 +503,12 @@ for inst in instances:
     else:
         df = None
     if df is not None:
-        smart_display(df)
+        log_cols = df.columns[2:] 
+        styled_df = gradient_style(df, cols=log_cols, html=is_html)
+        if is_html:
+            smart_display(df, styler=styled_df)
+        else:
+            smart_display(styled_df)
     display(Markdown(f" "))
 ```
 :::
