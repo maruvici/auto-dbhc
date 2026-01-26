@@ -1,11 +1,26 @@
 #!/bin/bash
-STAMP=$(date +%Y%m%d)
+
+# ===========================
+#       DATA EXTRACTION
+# ===========================
+source .venv/bin/activate
+
+echo "Starting Data Extraction..."
+
+# 0. Extract data
+python3 data_extractor.py
+
+# ===========================
+#     REPORT GENERATION
+# ===========================
+
+STAMP=$(ls -d ./dbhc_csv/* | sort | tail -n 1 | xargs basename)
 OUT_DIR="dbhc_reports/${STAMP}"
 mkdir -p "$OUT_DIR"
 SCRIPT_DIR="./dbhc_report_qmd"
 cd "$SCRIPT_DIR"
 
-echo "Starting Report Generation for $STAMP..."
+echo "Starting Report Generation for REPORT $STAMP..."
 
 PDF_NAME="dbhc_report.pdf"
 HTML_NAME="dbhc_report.html"

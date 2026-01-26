@@ -1,53 +1,57 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: 1. Get Date in YYYYMMDD format
-for /f "tokens=2-4 delims=/ " %%a in ('echo %date%') do (
-    set year=%%c
-    set month=%%a
-    set day=%%b
+:: ===========================
+::       DATA EXTRACTION
+:: ===========================
+
+:: Activate virtual environment (Windows uses \Scripts\activate)
+call .venv\Scripts\activate
+
+echo Starting Data Extraction...
+
+:: 0. Extract data
+python data_extractor.py
+
+:: ===========================
+::     REPORT GENERATION
+:: ===========================
+
+:: Get the last directory alphabetically
+:: /O:N sorts by name, /B is bare format, /A:D filters for directories
+for /f "delims=" %%i in ('dir "dbhc_csv" /b /ad /on') do (
+    set "STAMP=%%i"
 )
-set STAMP=%year%%month%%day%
 
-:: 2. Set Directories
-set "OUT_DIR=dbhc_reports\!STAMP!"
-set "SCRIPT_DIR=.\dbhc_report_qmd"
+set "OUT_DIR=dbhc_reports\%STAMP%"
+if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
-:: Create the output directory
-if not exist "!OUT_DIR!" mkdir "!OUT_DIR!"
+set "SCRIPT_DIR=dbhc_report_qmd"
+cd %SCRIPT_DIR%
 
-:: Move to the script directory
-cd /d "%SCRIPT_DIR%"
-
-echo Starting Report Generation for !STAMP!...
+echo Starting Report Generation for REPORT %STAMP%...
 
 set "PDF_NAME=dbhc_report.pdf"
 set "HTML_NAME=dbhc_report.html"
 
-:: 3. Render PDF
-quarto render pdf_generator.qmd --to pdf --output "!PDF_NAME!"
+:: 1. Render PDF
+quarto render pdf_generator.qmd --to pdf --output "%PDF_NAME%"
 
-:: 4. Render HTML
-quarto render html_generator.qmd --to html --output "!HTML_NAME!"
+:: 2. Render HTML
+quarto render html_generator.qmd --to html --output "%HTML_NAME%"
 
-:: 5. --- AUTOMATED CLEANUP ---
+:: 3. --- AUTOMATED CLEANUP ---
 echo Cleaning up residual files...
 
-:: Remove the .tex file if it exists
-if exist pdf_generator.tex del /f /q pdf_generator.tex
+del /f /q pdf_generator.tex
+if exist pdf_generator_files rmdir /s /q pdf_generator_files
+if exist html_generator_files rmdir /s /q html_generator_files
+if exist site_libs rmdir /s /q site_libs
 
-:: Remove auxiliary directories created by Quarto
-if exist pdf_generator_files rd /s /q pdf_generator_files
-if exist html_generator_files rd /s /q html_generator_files
+:: 4. Move final outputs
+cd ..
+move "%SCRIPT_DIR%\%PDF_NAME%" "%OUT_DIR%"
+move "%SCRIPT_DIR%\%HTML_NAME%" "%OUT_DIR%"
 
-:: Optional: Remove site_libs folder
-if exist site_libs rd /s /q site_libs
-
-:: 6. Move final outputs
-echo Moving reports to !OUT_DIR!...
-cd /d ".."
-move "%SCRIPT_DIR%\!PDF_NAME!" "!OUT_DIR!"
-move "%SCRIPT_DIR%\!HTML_NAME!" "!OUT_DIR!"
-
-echo Done. Reports are ready in !OUT_DIR!
+echo Done. Reports are ready in %OUT_DIR%
 pause

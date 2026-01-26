@@ -2,7 +2,7 @@
 Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. Created for SSI-PDS monthly health checkups.
 
 ## DBHC Data Analysis and Report Generation (SSI)
-0. Ensure `auto-dbhc` generated data is in `dbhc_data` directory
+0. Ensure `auto-dbhc-client` generated data is in `dbhc_data` directory
 1. Install Dependencies (In-Order)
     - Python
         - Windows:
@@ -45,10 +45,7 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
     - Other Dependencies
         - If using `pip`:
             - Run `pip install -r requirements.txt`
-
-2. Execute Data Extractor script
-    - Run `python3 data_extractor.py`
-3. Execute Report Generation script
+2. Execute Data Extractor and Report Generation script
     - For Windows:
         Run `generate_reports.bat`
     - For Linux (Ubuntu/Debian):
@@ -60,7 +57,7 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
 - ~~feat: Add Server Details Report part~~
 - ~~feat: Add AWR Report part~~
 - ~~feat: Add color styling~~
+- ~~feat: Add data extractor in automation scripts~~
 - feat: Add Executive Summary part
-- feat: Add data extractor in automation scripts
 - docs: Generate completed README.md
 - refactor: Make data compatible with OneDrive

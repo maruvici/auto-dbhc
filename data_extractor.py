@@ -482,7 +482,7 @@ def run_etl():
         else:
             # Create a dummy CSV with error message or empty to prevent file-not-found errors
             print(f"  -> Warning: Could not parse {input_file}")
-            pd.DataFrame({'Status': ['Parse Error']}).to_csv(output_csv, index=False)
+            pd.DataFrame({'Status': ['No Data Found.']}).to_csv(output_csv, index=False)
     
     print("--- ETL Complete ---")
 
