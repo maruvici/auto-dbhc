@@ -43,12 +43,18 @@ def smart_display(df, styler=None):
             else:
                 display(df)
         else:
-            is_wide = len(df.columns) > 7
-            font_size = r"\footnotesize" if is_wide else r"\normalsize"
+            if len(df.columns) > 10:
+                font_size = r"\tiny"
+            elif len(df.columns) > 7:
+                font_size = r"\footnotesize"
+            else:
+                font_size = r"\normalsize"
             print(font_size)
+
+            df = latex_escape_df(df)
             
             latex_string = df.to_latex(
-                escape=True, 
+                escape=False, # Needed for some latex commands
                 index=False, 
                 longtable=True,
             )
@@ -141,6 +147,39 @@ def gradient_style(df, cols, html=True):
             )
         )
     return df_pdf
+
+def latex_escape_df(df):
+    df = df.copy()
+
+    # Escape column names
+    df.columns = [
+        c.replace("\\", r"\textbackslash{}")
+         .replace("_", r"\_")
+         .replace("%", r"\%")
+         .replace("&", r"\&")
+         .replace("#", r"\#")
+         .replace("$", r"\$")
+        if isinstance(c, str) else c
+        for c in df.columns
+    ]
+
+    # Escape string cell values
+    for col in df.select_dtypes(include="object").columns:
+        if df[col].astype(str).str.contains("cellcolor").any():
+            continue
+
+        df[col] = (
+            df[col]
+            .str.replace("\\", r"\textbackslash{}", regex=False)
+            .str.replace("_", r"\_", regex=False)
+            .str.replace("%", r"\%", regex=False)
+            .str.replace("&", r"\&", regex=False)
+            .str.replace("#", r"\#", regex=False)
+            .str.replace("$", r"\$", regex=False)
+        )
+
+    return df
+
 
 def load_data(filename):
     path = curr_dir / filename
@@ -626,5 +665,5 @@ for inst in instances:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the AWR Report for Node 1
+This is the content of the AWR Report for Node 2
 :::
