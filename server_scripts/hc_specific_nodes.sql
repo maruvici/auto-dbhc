@@ -211,7 +211,6 @@ from V$RMAN_BACKUP_JOB_DETAILS where start_time between SYSDATE -4 and SYSDATE o
 spool off;
 
 -- 15. Sync Check
-SPOOL check_if_sync.txt
 spool check_if_sync.txt
 select distinct a.name "DBName",b.t1 thread#, b.ps "Last_Seq_On_Primary", c.ss "Last_Seq_Applied_on_Standby", b.ps-c.ss "GAP" from
    (select name from v$database) a,

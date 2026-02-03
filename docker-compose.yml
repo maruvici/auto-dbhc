@@ -1,0 +1,37 @@
+services:
+  node1:
+    build: .
+    hostname: pdsbancsv6db1p
+    container_name: pdsbancsv6db1p
+    networks:
+      oracle_net:
+        ipv4_address: 172.20.0.11
+    volumes:
+      - ./server_scripts/:/home/oracle/scripts
+
+  node2:
+    build: .
+    hostname: pdsbancsv6db2p
+    container_name: pdsbancsv6db2p
+    networks:
+      oracle_net:
+        ipv4_address: 172.20.0.12
+    volumes:
+      - ./server_scripts/:/home/oracle/scripts
+
+  dr_server:
+    build: .
+    hostname: pdsbancsv6db1d
+    container_name: pdsbancsv6db1d
+    networks:
+      oracle_net:
+        ipv4_address: 172.20.0.13
+    volumes:
+      - ./server_scripts/:/home/oracle/scripts
+
+networks:
+  oracle_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

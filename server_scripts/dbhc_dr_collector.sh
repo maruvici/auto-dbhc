@@ -90,7 +90,7 @@ if [ "${skip_check}" = false ]; then
     done
 
     while true; do
-        read -p "Do the outputs look correct? [Y/N]: " sanity_check
+        read -p "Do the outputs look correct? Y to Save. N to Delete.: " sanity_check
         case "${sanity_check}" in
             [yY] | [yY][eE][sS])
                 echo "Validation successful."

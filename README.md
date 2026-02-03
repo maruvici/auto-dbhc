@@ -13,7 +13,7 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) files. C
 1. Store `dbhc_prod_collect.sh` and sql scripts in root oracle path (e.g. /home/oracle)
 2. Run the script using `bash dbhc_prod_collector.sh` in node to be checked
     - Add `-s` to skip file checks
-    - Either add `-s <node_number>` OR Specify Production Node Numer at Script Start
+    - Either add `-n <node_number>` OR Specify Production Node Numer at Script Start
     - Requires manual creation of AWR HTML Report
 
 ### UNIFIED SCRIPT (Generate everything all at once)
