@@ -1,0 +1,9 @@
+SET FEEDBACK OFF
+SET HEAD OFF
+SET PAGESIZE 0
+SET VERIFY OFF
+
+SELECT MAX(snap_id)-1 || ' ' || MAX(snap_id)
+FROM dba_hist_snapshot;
+
+EXIT;

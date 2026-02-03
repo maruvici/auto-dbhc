@@ -42,6 +42,8 @@ asm_log_path="/u01/app/grid/diag/asm/+asm/+ASM${node_num}/trace"
 hc_all_nodes_path="auto-dbhc-collector/hc_all_nodes.sql"
 hc_specific_nodes_path="auto-dbhc-collector/hc_specific_nodes.sql"
 hc_global_report_path="auto-dbhc-collector/hc_global_reports.sql"
+generate_awrrpt_path="auto-dbhc-collector/generate_awwrpt.sql"
+get_snaps_path="auto-dbhc-collector/get_snaps.sql"
 
 # Some Notes About Script Variables
 # - timestamp was previously +"%d%^b%Y"
@@ -100,10 +102,20 @@ for instance in ${instance_arr[*]}; do
     cd "${node_dir}/${instance}"
     sqlplus -s / as sysdba "@${hc_all_nodes_path}"
     
-    # Manual AWR Step
-    echo "Please generate the AWR report manually for ${instance} now."
-    echo "Save it as: ${node_dir}/${instance}/awrrpt_..."
-    read -p "Press [Enter] once the AWR HTML file is placed in the folder..."
+    # <--- Automated AWR Section --->
+    echo "Generating AWR for ${instance}..."
+
+    # Get most recent Snap IDs
+    SNAP_IDS=$(sqlplus -s / as sysdba @"${get_snaps_path}")
+    BEGIN_SNAP=$(echo "$SNAP_IDS" | awk '{print $1}')
+    END_SNAP=$(echo "$SNAP_IDS" | awk '{print $2}')
+    AWR_NAME="${node_dir}/${instance}/awrrpt_${node_num}_${BEGIN_SNAP}_${END_SNAP}.html"    
+
+    # Generate AWR Report
+    sqlplus -s / as sysdba @"${generate_awrrpt_path}" \
+    "$BEGIN_SNAP" "$END_SNAP" "$AWR_NAME"
+
+    echo "AWR Report generated: $AWR_NAME"
 
     if [[ " ${sql_check_skip[*]} " =~ " ${node_num} " ]]; then
         echo "Skipping Some SQL checks for Node ${node_num}"
