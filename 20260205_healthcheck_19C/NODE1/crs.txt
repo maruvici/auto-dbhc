@@ -1,0 +1,5 @@
+CRS-4638: Oracle High Availability Services is online
+--------------------------------------------------------------------------------
+NAME           TARGET  STATE        SERVER                   STATE_DETAILS       
+--------------------------------------------------------------------------------
+ora.DATA.dg    ONLINE  ONLINE       pdsbancsv6db1p             STABLE

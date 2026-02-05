@@ -1,0 +1,17 @@
+top - 02:35:05 up  1:27,  0 users,  load average: 0.00, 0.02, 0.01
+Tasks:  10 total,   1 running,   9 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.0 us,  0.5 sy,  0.0 ni, 99.5 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :  15696.7 total,  14307.4 free,    892.3 used,    497.0 buff/cache
+MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  14531.3 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+      1 root      20   0    4364   2944   2816 S   0.0   0.0   0:00.05 mock_se+
+     17 root      20   0   15436   5640   4096 S   0.0   0.0   0:00.00 sshd
+     38 root      20   0    2824   1536   1536 S   0.0   0.0   0:00.00 tail
+     39 root      20   0   17156  10476   8448 S   0.0   0.1   0:00.05 sshd
+     50 oracle    20   0   17156   7884   5504 S   0.0   0.0   0:00.02 sshd
+     51 oracle    20   0    5048   3840   3328 S   0.0   0.0   0:00.01 bash
+     57 oracle    20   0 1225976   2176      0 S   0.0   0.0   0:00.05 prod_co+
+     63 oracle    20   0    2892   1536   1536 S   0.0   0.0   0:00.00 sh
+     64 oracle    20   0    7604   3584   3072 R   0.0   0.0   0:00.00 top
+     65 oracle    20   0    3224   1664   1664 S   0.0   0.0   0:00.00 head

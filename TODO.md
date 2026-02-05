@@ -3,3 +3,7 @@
 
 # Test Environment Caveats:
 1. Mock Binaries (sqlplus, crsctl, lsnrctl)
+
+# Question:
+1. Do all instances share the same oracle home?
+2. 
