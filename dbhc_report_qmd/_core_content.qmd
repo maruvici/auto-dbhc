@@ -6,6 +6,7 @@ from matplotlib.colors import Normalize, to_hex, LinearSegmentedColormap
 import numpy as np
 import os
 import sys
+import yaml
 from pathlib import Path
 from IPython.display import display, Markdown, Latex
 
@@ -209,6 +210,21 @@ def calc_growth(inst, mode="physical"):
     pct = ((curr - prev) / prev * 100) if prev != 0 else 0
     return f"{abs(pct):.2f}% {'Increase' if pct >= 0 else 'Decrease'}"
 
+def get_finding(key):
+    return manual_data.get(key, "*(No findings or recommendations recorded for this section.)*")
+
+def get_last_folder_name(directory_path):
+    dir_path = Path(directory_path)
+    if not dir_path.is_dir():
+        raise ValueError(f"'{directory_path}' is not a valid directory.")
+    
+    folders = [f for f in dir_path.iterdir() if f.is_dir()]
+    if not folders:
+        return None  # No folders found
+    
+    latest_folder = max(folders, key=lambda x: x.stat().st_mtime)
+    return latest_folder.name
+
 # --- DATA INITIALIZATION ---
 csv_dir = Path("../dbhc_csv")
 csv_subdirs = sorted([p for p in csv_dir.iterdir() if p.is_dir()])
@@ -225,6 +241,16 @@ _CMAP = LinearSegmentedColormap.from_list(
     "pastel_green_yellow_red",
     ["#b9f8beff", "#fff7a3ff", "#ffb3abff"]  # light green → cream → light red
 )
+
+# Loading Manual Inputs
+dir_name = get_last_folder_name("../dbhc_csv/")
+manual_path = Path(f"../dbhc_manual/{dir_name}/findings.yml")
+if manual_path.exists():
+    with open(manual_path, 'r') as f:
+        manual_data = yaml.safe_load(f)
+else:
+    with open(Path("../dbhc_manual/template_findings.yml"), 'r') as f:
+        manual_data = yaml.safe_load(f)
 
 # Database/Instance Details
 for inst in instances:
@@ -417,7 +443,10 @@ for inst in instances:
 
 ::: {.callout-note}
 ## Findings and Recommendations
-This is the content of the Data Size Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('db_size')))
+```
 :::
 
 ## Tablespace Status
@@ -442,7 +471,10 @@ for inst in instances:
 
 ::: {.callout-tip}
 ## Findings and Recommendations
-This is the content of the Table Size Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('tablespace')))
+```
 :::
 
 ## Control File Status
@@ -462,7 +494,10 @@ for inst in instances:
 
 ::: {.callout-warning}
 ## Findings and Recommendations
-This is the content of the Control File Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('control_file')))
+```
 :::
 
 ## RMAN Backup Status
@@ -482,7 +517,10 @@ for inst in instances:
 
 ::: {.callout-caution}
 ## Findings and Recommendations
-This is the content of the RMAN Backup Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('rman_backup')))
+```
 :::
 
 ## Data Guard Status
@@ -502,7 +540,10 @@ for inst in instances:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the Data Guard Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('data_guard')))
+```
 :::
 
 ## Invalid Object Status
@@ -522,7 +563,10 @@ for inst in instances:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the Invalid Objects Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('invalid_objects')))
+```
 :::
 
 ## Log Switch Status
@@ -554,7 +598,10 @@ for inst in instances:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the Log Switch Status Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('log_switch')))
+```
 :::
 
 # Server Details Report
@@ -570,7 +617,10 @@ if df is not None:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the ASM Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('asm')))
+```
 :::
 
 ## File System Utilization Status
@@ -589,7 +639,10 @@ for server in servers:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the FS Utilization Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('fs_util')))
+```
 :::
 
 ## Cluster Resource Status
@@ -608,7 +661,10 @@ for server in servers:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the CRS Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('crs')))
+```
 :::
 
 ## Listener Status
@@ -626,7 +682,10 @@ for server in servers:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the Listener Status Report
+```{python}
+#| output: asis
+display(Markdown(get_finding('lstnr')))
+```
 :::
 
 # AWR Report 
@@ -646,7 +705,10 @@ for inst in instances:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the AWR Report for Node 1
+```{python}
+#| output: asis
+display(Markdown(get_finding('awr_1')))
+```
 :::
 
 
@@ -665,5 +727,8 @@ for inst in instances:
 
 ::: {.callout-important}
 ## Findings and Recommendations
-This is the content of the AWR Report for Node 2
+```{python}
+#| output: asis
+display(Markdown(get_finding('awr_2')))
+```
 :::

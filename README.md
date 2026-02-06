@@ -50,6 +50,8 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
         Run `generate_reports.bat`
     - For Linux (Ubuntu/Debian):
         Run `bash generate_reports.sh`
+            - `--extract`: to extract csv data only
+            - `--generate`: to generate reports only
 
 
 ## TODO
@@ -58,6 +60,7 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
 - ~~feat: Add AWR Report part~~
 - ~~feat: Add color styling~~
 - ~~feat: Add data extractor in automation scripts~~
+- ~~feat: Implement manual input for findings~~
 - feat: Add Executive Summary part
 - docs: Generate completed README.md
 - refactor: Make data compatible with OneDrive
