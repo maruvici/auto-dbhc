@@ -34,8 +34,11 @@ fi
 #     REPORT GENERATION
 # ===========================
 
-STAMP=$(ls -d ./dbhc_csv/* | sort | tail -n 1 | xargs basename)
-mkdir -p "dbhc_manual/${STAMP}"
+STAMP=$(ls -d ./dbhc_extracted_data/* | sort | tail -n 1 | xargs basename)
+mkdir -p "dbhc_manual/${STAMP}/assets"
+if [[ ! -f "dbhc_manual/${STAMP}/findings.yml" ]]; then
+  cp "dbhc_manual/template_findings.yml" "dbhc_manual/${STAMP}/findings.yml"
+fi
 OUT_DIR="dbhc_reports/${STAMP}"
 mkdir -p "$OUT_DIR"
 SCRIPT_DIR="./dbhc_report_qmd"

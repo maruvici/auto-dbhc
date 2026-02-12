@@ -45,13 +45,21 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
     - Other Dependencies
         - If using `pip`:
             - Run `pip install -r requirements.txt`
-2. Execute Data Extractor and Report Generation script
-    - For Windows:
-        Run `generate_reports.bat`
-    - For Linux (Ubuntu/Debian):
-        Run `bash generate_reports.sh`
-            - `--extract`: to extract csv data only
-            - `--generate`: to generate reports only
+3. Execute Report Generation script
+    - Run `bash generate_reports.sh`
+        - `--extract`: to extract data from raw data only
+        - `--generate`: to generate reports only
+4. Add human-generated data in `dbhc_manual` directory under the correct timestampped subdir
+    - For images: `![Alt Text](./assets/image.jpg){width=70% style="display:block; margin:0 auto;"}`
+5. Change callouts in `_core_content.qmd` to correspond with urgency level:
+    - Callout Levels in increasing order of urgency:
+        - .callout-tip
+        - .callout-note
+        - .callout-warning
+        - .callout-caution
+        - .callout-important
+6. Execute Report Generation script again
+
 
 
 ## TODO

@@ -2,7 +2,8 @@ summary: |
   This is the content of the Executive Summary Findings and Recommendations
   
 db_size: |
-  This is a test
+  This is an example image \
+  ![Placeholder](https://placehold.net/800x600.png){width=70% style="display:block; margin:0 auto;"}
 
 tablespace: |
   This is the content of the Tablespace Report

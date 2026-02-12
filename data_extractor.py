@@ -121,84 +121,6 @@ def parse_spool_file(file: Path) -> Optional[pd.DataFrame]:
         print(f"Error parsing {file.name}: {e}")
         return None
 
-def parse_crs_file(file: Path) -> Optional[pd.DataFrame]:
-    if not file.exists():
-        return None
-
-    try:
-        with open(file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-    except Exception:
-        return None
-
-    data = []
-    current_res = None
-    current_row = None
-    
-    # Updated to include INTERMEDIATE state found in your logs
-    status_pattern = re.compile(r'(ONLINE|OFFLINE|INTERMEDIATE)\s+(ONLINE|OFFLINE|INTERMEDIATE)')
-
-    for line in lines:
-        raw_line = line.strip('\n')
-        stripped = raw_line.strip()
-
-        if stripped in ["Local Resources", "Cluster Resources"]:
-            if current_row:
-                data.append(current_row)
-                current_row = None
-            data.append({"Resource": f"{stripped.upper()}", "Instance": "", "Target": "", "State": "", "Server": "", "Details": ""})
-            continue
-
-        if not stripped or "---" in stripped or "Name" in stripped:
-            continue
-
-        if raw_line.startswith('ora.'):
-            if current_row:
-                data.append(current_row)
-                current_row = None
-            current_res = stripped
-            continue
-
-        if status_pattern.search(raw_line):
-            if current_row:
-                data.append(current_row)
-
-            # Robust parsing: handle single spaces between Target/State
-            parts = re.split(r'\s{2,}', stripped)
-            
-            if parts[0].isdigit():
-                inst = parts.pop(0)
-                # If Target and State are merged (e.g., 'OFFLINE OFFLINE'), split them
-                if len(parts) > 0 and ' ' in parts[0]:
-                    status_parts = parts[0].split()
-                    parts = status_parts + parts[1:]
-                
-                # Safe assignment to prevent IndexError
-                target = parts[0] if len(parts) > 0 else ""
-                state = parts[1] if len(parts) > 1 else ""
-                server = parts[2] if len(parts) > 2 else ""
-                details = " ".join(parts[3:]) if len(parts) > 3 else ""
-            else:
-                if len(parts) > 0 and ' ' in parts[0]:
-                    status_parts = parts[0].split()
-                    parts = status_parts + parts[1:]
-                
-                inst = "N/A"
-                target = parts[0] if len(parts) > 0 else ""
-                state = parts[1] if len(parts) > 1 else ""
-                server = parts[2] if len(parts) > 2 else ""
-                details = " ".join(parts[3:]) if len(parts) > 3 else ""
-
-            current_row = {"Resource": current_res, "Instance": inst, "Target": target, "State": state, "Server": server, "Details": details}
-        
-        elif current_row and raw_line.startswith(' '):
-            current_row["Details"] += " " + stripped
-
-    if current_row:
-        data.append(current_row)
-
-    return pd.DataFrame(data)
-
 def parse_fs_file(file: Path) -> Optional[pd.DataFrame]:
     """
     Parses a fs file into a Pandas DataFrame
@@ -241,91 +163,6 @@ def parse_fs_file(file: Path) -> Optional[pd.DataFrame]:
     except Exception as e:
         print(f"Error: {e}")
         return None
-
-def parse_lstnr_file(file: Path) -> Optional[pd.DataFrame]:
-    """
-    Parses an lstnr file a pandas DataFrame.
-    """
-    if not file.exists():
-        return None
-
-    try:
-        with open(file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-    except Exception:
-        return None
-
-    data = []
-    metadata = {}
-    current_service = None
-    section = None
-
-    for line in lines:
-        raw_line = line.strip('\n')
-        stripped = line.strip()
-
-        if not stripped or "---" in stripped or "LSNRCTL for" in stripped or "Copyright" in stripped:
-            continue
-
-        # 1. Capture Basic Metadata
-        if ":" in stripped and section is None:
-            # Handle lines like 'Alias  LISTENER' or 'Version TNSLSNR...'
-            parts = re.split(r'\s{2,}', stripped)
-            if len(parts) >= 2:
-                metadata[parts[0]] = parts[1]
-            elif "Connecting to" in stripped:
-                metadata["Connection"] = stripped.replace("Connecting to ", "")
-            continue
-
-        # 2. Section Detection
-        if "Listening Endpoints Summary..." in stripped:
-            section = "ENDPOINTS"
-            continue
-        elif "Services Summary..." in stripped:
-            section = "SERVICES"
-            continue
-        elif "The command completed successfully" in stripped:
-            break
-
-        # 3. Parse Endpoints
-        if section == "ENDPOINTS" and "(DESCRIPTION=" in stripped:
-            data.append({
-                "Type": "Endpoint",
-                "Name": "Listener",
-                "Status": "LISTENING",
-                "Details": stripped
-            })
-
-        # 4. Parse Services and Instances
-        if section == "SERVICES":
-            # Service header: Service "bancsarc" has 1 instance(s).
-            service_match = re.search(r'Service "([^"]+)"', stripped)
-            if service_match:
-                current_service = service_match.group(1)
-                continue
-            
-            # Instance line: Instance "bancsarc1", status READY, has 1 handler(s)...
-            if current_service and "Instance" in stripped:
-                inst_match = re.search(r'Instance "([^"]+)", status ([^,]+)', stripped)
-                if inst_match:
-                    inst_name = inst_match.group(1)
-                    status = inst_match.group(2)
-                    data.append({
-                        "Type": "Service Instance",
-                        "Name": f"{current_service} ({inst_name})",
-                        "Status": status,
-                        "Details": stripped
-                    })
-
-    if not data:
-        return None
-
-    # Merge metadata into the rows for context
-    df = pd.DataFrame(data)
-    for key, value in metadata.items():
-        df[key] = value
-
-    return df
 
 def parse_awrrpt_file(file: Path) -> Optional[pd.DataFrame]:
     """
@@ -402,12 +239,12 @@ def run_etl():
 
     # Create Timestampped Directory in CSV Directory
     timestamp = curr_dir.name.split("_")[0]
-    csv_dir = Path('./dbhc_csv') / timestamp
-    csv_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path('./dbhc_extracted_data') / timestamp
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Move Already Existing CSV Files in CSV directory
     for csv_path in curr_dir.glob("*.csv"):
-        shutil.copy(str(csv_path), str(csv_dir))
+        shutil.copy(str(csv_path), str(output_dir))
 
     server_arr = ("DR", "NODE1", "NODE2")
     instance_arr = ("bancsarc", "bancsdb", "bancsrep")
@@ -419,34 +256,31 @@ def run_etl():
         node_path_curr = curr_dir / "NODE1" / f"{instance}1"
 
         # Data Size - Previous
-        files_map[node_path_prev / "dba_data_files.txt"] = csv_dir / f"db_size_physical_{instance}_prev.csv"
-        files_map[node_path_prev / "dba_segments.txt"] = csv_dir / f"db_size_logical_{instance}_prev.csv"
+        files_map[node_path_prev / "dba_data_files.txt"] = output_dir / f"db_size_physical_{instance}_prev.csv"
+        files_map[node_path_prev / "dba_segments.txt"] = output_dir / f"db_size_logical_{instance}_prev.csv"
         
         # Data Size - Current
-        files_map[node_path_curr / "dba_data_files.txt"] = csv_dir / f"db_size_physical_{instance}_cur.csv"
-        files_map[node_path_curr / "dba_segments.txt"] = csv_dir / f"db_size_logical_{instance}_cur.csv"
+        files_map[node_path_curr / "dba_data_files.txt"] = output_dir / f"db_size_physical_{instance}_cur.csv"
+        files_map[node_path_curr / "dba_segments.txt"] = output_dir / f"db_size_logical_{instance}_cur.csv"
 
         # Reports
-        files_map[node_path_curr / "tablespace_2.txt"]   = csv_dir / f"tablespace_{instance}.csv"
-        files_map[node_path_curr / "controlfile.txt"]    = csv_dir / f"controlfile_{instance}.csv"
-        files_map[node_path_curr / "check_backup.txt"]   = csv_dir / f"backup_{instance}.csv"
-        files_map[node_path_curr / "check_if_sync.txt"]  = csv_dir / f"data_guard_{instance}.csv"
-        files_map[node_path_curr / "invalid_objects.txt"] = csv_dir / f"invalid_objects_{instance}.csv"
+        files_map[node_path_curr / "tablespace_2.txt"]   = output_dir / f"tablespace_{instance}.csv"
+        files_map[node_path_curr / "controlfile.txt"]    = output_dir / f"controlfile_{instance}.csv"
+        files_map[node_path_curr / "check_backup.txt"]   = output_dir / f"backup_{instance}.csv"
+        files_map[node_path_curr / "check_if_sync.txt"]  = output_dir / f"data_guard_{instance}.csv"
+        files_map[node_path_curr / "invalid_objects.txt"] = output_dir / f"invalid_objects_{instance}.csv"
     
     # ASM Report
-    files_map[curr_dir / "NODE1" / "bancsarc1" / "ASM.txt" ] = csv_dir / f"asm.csv"
-
-    # CRS Report
-    files_map[curr_dir / "NODE1" / "crs.txt" ] = csv_dir / f"crs.csv"
+    files_map[curr_dir / "NODE1" / "bancsarc1" / "ASM.txt" ] = output_dir / f"asm.csv"
 
     # Server Reports
     for server in server_arr:
         if server != "NODE2":
-            files_map[curr_dir / f"{server}" / "crs.txt" ] = csv_dir / f"crs_{server}.csv"
-        files_map[curr_dir / f"{server}" / "FS.txt" ] = csv_dir / f"fs_util_{server}.csv"
-        files_map[curr_dir / f"{server}" / "lstnr.txt" ] = csv_dir / f"lstnr_{server}.csv"
+            files_map[curr_dir / f"{server}" / "crs.txt" ] = output_dir / f"crs_{server}.txt"
+        files_map[curr_dir / f"{server}" / "FS.txt" ] = output_dir / f"fs_util_{server}.csv"
+        files_map[curr_dir / f"{server}" / "lstnr.txt" ] = output_dir / f"lstnr_{server}.txt"
 
-    # AWRRPT Reports (Not Yet Parseable)
+    # AWRRPT Reports
     for i in range(1, 3):
         current_node = f"NODE{i}"
         for instance in instance_arr:
@@ -456,33 +290,36 @@ def run_etl():
             if matching_files:
                 # Take the first match found
                 actual_file = matching_files[0]
-                files_map[actual_file] = csv_dir / f"awrrpt_{current_node}_{instance}.csv"
+                files_map[actual_file] = output_dir / f"awrrpt_{current_node}_{instance}.csv"
             else:
                 print(f"No AWRRPT.html file found in {target_dir}")
 
     print("--- Starting ETL Process ---")
-    for input_file, output_csv in files_map.items():
+    for input_file, output_file in files_map.items():
         print(f"Processing {str(input_file)}...")
 
-        if re.search(r"crs", str(output_csv)):
-            df = parse_crs_file(input_file)
-        elif re.search(r"fs", str(output_csv)):
+        if re.search(r"crs", str(output_file)) or re.search(f"lstnr", str(output_file)):
+            try:
+                shutil.copy2(input_file, output_file)
+                print(f"  -> Saved to {output_file}")
+                continue
+            except Exception as e:
+                print(f"Error during copy: {e}")
+        elif re.search(r"fs", str(output_file)):
             df = parse_fs_file(input_file)
-        elif re.search(f"lstnr", str(output_csv)):
-            df = parse_lstnr_file(input_file)
-        elif re.search(f"awrrpt", str(output_csv)):
+        elif re.search(f"awrrpt", str(output_file)):
             df = parse_awrrpt_file(input_file)
         else:
             df = parse_spool_file(input_file)
         
         if df is not None:
             # We save even empty DFs so the QMD file doesn't crash when looking for the file
-            df.to_csv(output_csv, index=False)
-            print(f"  -> Saved to {output_csv} ({len(df)} rows)")
+            df.to_csv(output_file, index=False)
+            print(f"  -> Saved to {output_file} ({len(df)} rows)")
         else:
             # Create a dummy CSV with error message or empty to prevent file-not-found errors
             print(f"  -> Warning: Could not parse {input_file}")
-            pd.DataFrame({'Status': ['No Data Found.']}).to_csv(output_csv, index=False)
+            pd.DataFrame({'Status': ['No Data Found.']}).to_csv(output_file, index=False)
     
     print("--- ETL Complete ---")
 

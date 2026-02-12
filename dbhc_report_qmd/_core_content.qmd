@@ -19,7 +19,8 @@ if is_html:
         options.maxColumns = 0        
         options.scrollX = True        
         options.dom = '<"top-row"lf>rt<"bottom-row"p>i'      
-        options.pageLength = -1       
+        options.pageLength = -1
+        options.lengthMenu = [5, 10, 25, 50, 100]       
         options.classes = ["display", "nowrap", "cell-border", "compact"]
         options.style = "width:100%; margin:auto;"
     except ImportError:
@@ -37,6 +38,7 @@ plt.rcParams['figure.autolayout'] = True
 
 # --- HELPER FUNCTIONS ---
 def smart_display(df, styler=None):
+    df = df.replace('', np.nan).fillna('')
     if df is not None:
         if is_html:
             if styler is not None:
@@ -72,31 +74,27 @@ def smart_display(df, styler=None):
 
 def display_split_tables(df):
     """
-    Splits tables with empty rows to multiple
-    mini tables
+    Splits a DataFrame into a list of DataFrames based on rows 
+    that are completely empty (NaN or empty strings).
     """
-    if df is None or df.empty:
-        return
 
-    # If the first row of headers are just strings of numbers, we drop them
-    if all(str(col).isdigit() for col in df.columns):
-        df.columns = range(len(df.columns)) 
-        
-    is_empty = df.apply(lambda x: x.astype(str).str.strip().replace('nan', '').eq('').all(), axis=1)
+    # Replace empty strings/whitespace with NaN to ensure .isna() catches everything
+    mask = df.replace(r'^\s*$', np.nan, regex=True).isna().all(axis=1)
     
-    # Group consecutive non-empty rows into single blocks
+    # Get the integer indices of empty rows
+    separator_indices = np.where(mask)[0]
+    
     blocks = []
-    current_block = []
-    
-    for i, row_is_empty in enumerate(is_empty):
-        if not row_is_empty:
-            current_block.append(df.iloc[i])
-        else:
-            if current_block:
-                blocks.append(pd.DataFrame(current_block))
-                current_block = []
-    if current_block: # Catch the last block
-        blocks.append(pd.DataFrame(current_block))
+    start_idx = 0
+
+    for idx in separator_indices:
+        block = df.iloc[start_idx:idx]
+        if not block.empty:
+            blocks.append(block)
+        start_idx = idx + 1
+        
+    if start_idx < len(df):
+        blocks.append(df.iloc[start_idx:])
 
     for block in blocks:
         block = block.replace('', np.nan).dropna(axis=1, how='all').fillna('')
@@ -104,14 +102,7 @@ def display_split_tables(df):
         if block.empty or len(block.columns) == 0:
             continue
 
-        # Check for Title Rows
-        row_content = [str(c).strip() for c in block.iloc[0] if str(c).strip() and str(c).strip() != 'nan']
-        
-        if len(block) == 1 and len(row_content) == 1:
-            display(Markdown(f"#### {row_content[0]}"))
-        else:
-            # Display as a single cohesive table
-            smart_display(block)
+        smart_display(block)
         
         display(Markdown("<br>"))
 
@@ -181,11 +172,16 @@ def latex_escape_df(df):
 
     return df
 
-
 def load_data(filename):
     path = curr_dir / filename
     if path.exists():
-        return pd.read_csv(path)
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            return pd.read_csv(path)
+        elif suffix == ".txt":
+            with open(path, 'r') as f:
+                content = f.read()
+                return content   
     return None
 
 def annotate_delta(x_pos, prev, curr):
@@ -211,22 +207,20 @@ def calc_growth(inst, mode="physical"):
     return f"{abs(pct):.2f}% {'Increase' if pct >= 0 else 'Decrease'}"
 
 def get_finding(key):
+    # Loading Manual Inputs
+    dir_name = curr_dir.name
+    manual_path = Path(f"../dbhc_manual/{dir_name}/findings.yml")
+    if manual_path.exists():
+        with open(manual_path, 'r') as f:
+            manual_data = yaml.safe_load(f)
+    else:
+        with open(Path("../dbhc_manual/template_findings.yml"), 'r') as f:
+            manual_data = yaml.safe_load(f)
+
     return manual_data.get(key, "*(No findings or recommendations recorded for this section.)*")
 
-def get_last_folder_name(directory_path):
-    dir_path = Path(directory_path)
-    if not dir_path.is_dir():
-        raise ValueError(f"'{directory_path}' is not a valid directory.")
-    
-    folders = [f for f in dir_path.iterdir() if f.is_dir()]
-    if not folders:
-        return None  # No folders found
-    
-    latest_folder = max(folders, key=lambda x: x.stat().st_mtime)
-    return latest_folder.name
-
-# --- DATA INITIALIZATION ---
-csv_dir = Path("../dbhc_csv")
+# --- GLOBAL DATA INITIALIZATION ---
+csv_dir = Path("../dbhc_extracted_data")
 csv_subdirs = sorted([p for p in csv_dir.iterdir() if p.is_dir()])
 curr_dir = csv_subdirs[-1]
 instances = ["bancsarc", "bancsdb", "bancsrep"]
@@ -241,16 +235,6 @@ _CMAP = LinearSegmentedColormap.from_list(
     "pastel_green_yellow_red",
     ["#b9f8beff", "#fff7a3ff", "#ffb3abff"]  # light green → cream → light red
 )
-
-# Loading Manual Inputs
-dir_name = get_last_folder_name("../dbhc_csv/")
-manual_path = Path(f"../dbhc_manual/{dir_name}/findings.yml")
-if manual_path.exists():
-    with open(manual_path, 'r') as f:
-        manual_data = yaml.safe_load(f)
-else:
-    with open(Path("../dbhc_manual/template_findings.yml"), 'r') as f:
-        manual_data = yaml.safe_load(f)
 
 # Database/Instance Details
 for inst in instances:
@@ -271,10 +255,10 @@ for inst in instances:
 for server in servers:
     db_data[server] = {
         "fs": load_data(f"fs_util_{server}.csv"),
-        "lstnr": load_data(f"lstnr_{server}.csv"),
+        "lstnr": load_data(f"lstnr_{server}.txt"),
     }
     if server != "NODE2":
-        db_data[server]["crs"] = load_data(f"crs_{server}.csv")
+        db_data[server]["crs"] = load_data(f"crs_{server}.txt")
 
 # AWR Details
 for server in servers:
@@ -302,7 +286,7 @@ for sec in sections:
                     f"- **{inst.upper()}**:\n"
                     f"    - **{phys}** Physical Size vs Previous Month\n"
                     f"    - **{log}** Logical Size vs Previous Month"
-                    ))
+                ))
         case "TABLESPACE":
             for inst in instances:
                 try:
@@ -351,7 +335,7 @@ for sec in sections:
                 display(Markdown(f"- **{inst.upper()}**: {dg_status}."))
         case "LOG SWITCH":
             for inst in instances:
-                log_switch_status = "test"
+                log_switch_status = "Redo size is good, spreading workload can help reduce spikes"
                 display(Markdown(f"- **{inst.upper()}**: {log_switch_status}."))
         case "ASM":
             for inst in instances:
@@ -384,13 +368,24 @@ for sec in sections:
                     fs_status = "No filesystems detected"
                 display(Markdown(f"- **{server.upper()}**: {fs_status}."))
         case "CRS":
-            for inst in instances:
-                print("test")
+            for server in servers:
+                if server != "NODE2":
+                    crs_status = ": All Resources are online. No Issues"
+                    display(Markdown(f"- **{server.upper()}**: {crs_status}."))
         case "LISTENER":
-            for inst in instances:
-                print("test")
+            for server in servers:
+                lstnr_status = ": No issues on listeners"
+                display(Markdown(f"- **{server.upper()}**: {lstnr_status}."))
     
     display(Markdown(f" "))
+```
+:::
+
+::: {.callout-note}
+## Notable Findings and Recommendations
+```{python}
+#| output: asis
+display(Markdown(get_finding('summary')))
 ```
 :::
 
@@ -469,7 +464,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-tip}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -492,7 +487,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-warning}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -515,7 +510,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-caution}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -538,7 +533,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -561,7 +556,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -596,7 +591,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -615,7 +610,7 @@ if df is not None:
     smart_display(df)
 ```
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -637,7 +632,7 @@ for server in servers:
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -653,13 +648,13 @@ for server in servers:
     if server != "NODE2":
         display(Markdown(f"### {server.upper()}"))
         if db_data[server]['crs'] is not None:
-            df = db_data[server]['crs']
-            smart_display(df)
+            content = db_data[server]['crs']
+            print(f"```{{.text .code-overflow-scroll style='max-height: 80%;'}}\n{content}\n```")
         display(Markdown(f" "))
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -674,13 +669,13 @@ display(Markdown(get_finding('crs')))
 for server in servers:
     display(Markdown(f"### {server.upper()}"))
     if db_data[server]['lstnr'] is not None:
-        df = db_data[server]['lstnr']
-        smart_display(df)
+        content = db_data[server]['lstnr']
+        print(f"```{{.text .code-overflow-scroll style='max-height: 80%;'}}\n{content}\n```")
     display(Markdown(f" "))
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -703,7 +698,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
@@ -725,7 +720,7 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-important}
+::: {.callout-note}
 ## Findings and Recommendations
 ```{python}
 #| output: asis
