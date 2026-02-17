@@ -1,6 +1,7 @@
 import shutil
 import re
 import io
+import sys
 import pandas as pd
 from pathlib import Path
 from typing import Optional
@@ -224,13 +225,13 @@ def parse_awrrpt_file(file: Path) -> Optional[pd.DataFrame]:
         print(f"Error parsing AWR: {e}")
         return None
 
-def run_etl():
+def run_etl(src_path, dest_path):
     """
     Main function to process all defined files.
     """
 
     # Get Two Latest Health Checks for Data Comparison
-    data_dir = Path("./dbhc_data")
+    data_dir = Path(f"{src_path}")
     data_subdirs = sorted([p for p in data_dir.iterdir() if p.is_dir()])
     if len(data_subdirs) < 2:
         raise SystemExit("Error: Not enough data directories found to compare.")
@@ -239,7 +240,7 @@ def run_etl():
 
     # Create Timestampped Directory in CSV Directory
     timestamp = curr_dir.name.split("_")[0]
-    output_dir = Path('./dbhc_extracted_data') / timestamp
+    output_dir = Path(f"{dest_path}") / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Move Already Existing CSV Files in CSV directory
@@ -324,4 +325,11 @@ def run_etl():
     print("--- ETL Complete ---")
 
 if __name__ == "__main__":
-    run_etl()
+    if len(sys.argv) > 2:
+        src_path = sys.argv[1]
+        dest_path = sys.argv[2]
+        print(f"Accessing data at: {src_path}")
+        run_etl(src_path, dest_path)
+        print(f"Extracted data stored in: {dest_path}")
+    else:
+        print("Please follow the format: python3 script_name [src_path] [dest_path]")

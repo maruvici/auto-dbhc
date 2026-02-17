@@ -23,10 +23,17 @@ for arg in "$@"; do
   esac
 done
 
+# ================================
+#       ONEDRIVE DIR SETUP
+# ================================
+
+DATA_PATH="/mnt/c/Users/Mark/OneDrive/dbhc_data"
+EXTRACTED_DATA_PATH="/mnt/c/Users/Mark/OneDrive/dbhc_extracted_data"
+
 if [ "${skip_extraction}" = false ]; then
     echo "Starting Data Extraction..."
     # 0. Extract data
-    python3 data_extractor.py
+    python3 data_extractor.py ${DATA_PATH} ${EXTRACTED_DATA_PATH}
     echo "Done. Data is ready."
 fi
 
@@ -34,7 +41,7 @@ fi
 #     REPORT GENERATION
 # ===========================
 
-STAMP=$(ls -d ./dbhc_extracted_data/* | sort | tail -n 1 | xargs basename)
+STAMP=$(ls -d ${EXTRACTED_DATA_PATH}/* | sort | tail -n 1 | xargs basename)
 mkdir -p "dbhc_manual/${STAMP}/assets"
 if [[ ! -f "dbhc_manual/${STAMP}/findings.yml" ]]; then
   cp "dbhc_manual/template_findings.yml" "dbhc_manual/${STAMP}/findings.yml"

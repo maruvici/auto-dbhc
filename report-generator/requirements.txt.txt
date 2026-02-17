@@ -1,0 +1,9 @@
+bs4
+ipykernel
+itables
+jupyter
+matplotlib
+numpy
+pandas
+pyyaml
+quarto

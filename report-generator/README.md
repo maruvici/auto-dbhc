@@ -1,8 +1,9 @@
 # automated-db-health-checkup
-Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. Created for SSI-PDS monthly health checkups.
+Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. Created for one of SSI's clients' monthly DB health checkups.
 
 ## DBHC Data Analysis and Report Generation (SSI)
-0. Ensure `auto-dbhc-client` generated data is in `dbhc_data` directory
+0. Ensure `data-collector` generated data is in `dbhc_data` directory (either locally or in OneDrive)
+    - If using OneDrive: ensure `.env` file exists storing `DATA_PATH` and `EXTRACTED_DATA_PATH` variables
 1. Install Dependencies (In-Order)
     - Python
         - Windows:
