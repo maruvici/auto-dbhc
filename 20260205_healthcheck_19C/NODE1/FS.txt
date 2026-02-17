@@ -1,8 +1,0 @@
-Filesystem      Size  Used Avail Use% Mounted on
-overlay        1007G   41G  916G   5% /
-tmpfs            64M     0   64M   0% /dev
-shm              64M     0   64M   0% /dev/shm
-/dev/sdd       1007G   41G  916G   5% /etc/hosts
-tmpfs           7.7G     0  7.7G   0% /proc/acpi
-tmpfs           7.7G     0  7.7G   0% /proc/scsi
-tmpfs           7.7G     0  7.7G   0% /sys/firmware
