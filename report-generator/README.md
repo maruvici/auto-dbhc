@@ -2,9 +2,12 @@
 Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. Created for one of SSI's clients' monthly DB health checkups.
 
 ## DBHC Data Analysis and Report Generation (SSI)
-0. Ensure `data-collector` generated data is in `dbhc_data` directory (either locally or in OneDrive)
-    - If using OneDrive: ensure `.env` file exists storing `DATA_PATH` and `EXTRACTED_DATA_PATH` variables
-1. Install Dependencies (In-Order)
+0. Create corresponding symbolic link to the following OneDrive directory:
+    - `ln -s <OneDriveDirectory> dbhc_onedrive`
+    - Default OneDrive Directory Location:
+        - WSL: /mnt/c/Users/\<user\>/'Strategic Synergy Incorporated'/'Marqueses, Alexis Rafael F. - DB FILES'/'PDS - Oracle'/'PDS - Database'/DBHC/
+1. Ensure latest `data-collector` generated data is in `dbhc_data` directory
+2. Install Dependencies (In-Order)
     - Python
         - Windows:
             - Visit the [Official Python Website](https://www.python.org/downloads/)
@@ -61,8 +64,6 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
         - .callout-important
 6. Execute Report Generation script again
 
-
-
 ## TODO
 - ~~feat: Add Database Details Report part~~
 - ~~feat: Add Server Details Report part~~
@@ -70,6 +71,6 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
 - ~~feat: Add color styling~~
 - ~~feat: Add data extractor in automation scripts~~
 - ~~feat: Implement manual input for findings~~
+- ~~refactor: Make data compatible with OneDrive~~
 - feat: Add Executive Summary part
 - docs: Generate completed README.md
-- refactor: Make data compatible with OneDrive

@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# ================================
+#       ONEDRIVE DIR SETUP
+# ================================
+
+DATA_PATH="./dbhc_onedrive/dbhc_data"
+EXTRACTED_DATA_PATH="./dbhc_onedrive/dbhc_extracted_data"
+REPORTS_PATH="./dbhc_onedrive/dbhc_reports"
+
 # ===========================
 #       DATA EXTRACTION
 # ===========================
@@ -23,13 +31,6 @@ for arg in "$@"; do
   esac
 done
 
-# ================================
-#       ONEDRIVE DIR SETUP
-# ================================
-
-DATA_PATH="/mnt/c/Users/Mark/OneDrive/dbhc_data"
-EXTRACTED_DATA_PATH="/mnt/c/Users/Mark/OneDrive/dbhc_extracted_data"
-
 if [ "${skip_extraction}" = false ]; then
     echo "Starting Data Extraction..."
     # 0. Extract data
@@ -46,7 +47,7 @@ mkdir -p "dbhc_manual/${STAMP}/assets"
 if [[ ! -f "dbhc_manual/${STAMP}/findings.yml" ]]; then
   cp "dbhc_manual/template_findings.yml" "dbhc_manual/${STAMP}/findings.yml"
 fi
-OUT_DIR="dbhc_reports/${STAMP}"
+OUT_DIR="${REPORTS_PATH}/${STAMP}"
 mkdir -p "$OUT_DIR"
 SCRIPT_DIR="./dbhc_report_qmd"
 cd "$SCRIPT_DIR"

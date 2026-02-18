@@ -220,7 +220,7 @@ def get_finding(key):
     return manual_data.get(key, "*(No findings or recommendations recorded for this section.)*")
 
 # --- GLOBAL DATA INITIALIZATION ---
-csv_dir = Path("../dbhc_extracted_data")
+csv_dir = Path("../dbhc_onedrive/dbhc_extracted_data")
 csv_subdirs = sorted([p for p in csv_dir.iterdir() if p.is_dir()])
 curr_dir = csv_subdirs[-1]
 instances = ["bancsarc", "bancsdb", "bancsrep"]
