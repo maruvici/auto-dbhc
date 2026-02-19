@@ -11,23 +11,42 @@ import (
 	"time"
 )
 
-// This directive embeds your SQL files into the binary at compile time
+// This directive now looks in the current directory (prod_collector) for SQL files
 //go:embed *.sql
 var sqlScripts embed.FS
 
-var interactiveMode = true
-var nodeDir string
-var mainDir string
+var (
+	interactiveMode = true
+	nodeNum         string
+	odbVersion      = "19C"
+	oraclePath      = "/home/oracle"
+	crsSkip         = []string{"2"}
+	sqlCheckSkip    = []string{"2"}
+
+	allNodesFiles = []string{
+		"BLOCKING_1.txt", "BLOCKING_2.txt", "inactive_session.txt",
+		"LONGOPS.txt", "parameter.txt", "session.txt",
+	}
+
+	specNodesFiles = []string{
+		"dba_data_files.txt", "dba_segments.txt", "datafiles.txt",
+		"table_usage.txt", "LOCKED_OBJECTS.txt", "tablespace_2.txt",
+		"tablespace_with_temporaryTBS.txt", "ASM.txt", "asm_diskgroup.txt",
+		"controlfile.txt", "dba_indexes.txt", "Vlog.txt", "uptime.txt",
+		"invalid_objects.txt", "check_backup.txt", "check_if_sync.txt",
+		"backup_status.txt", "archivelog_volume.txt", "select_all_redo_logs.txt",
+	}
+)
 
 func main() {
-	// --- 1. HANDLE OPTIONS ---
-	nodeNum := ""
-	for i, arg := range os.Args {
+	// 1. HANDLE OPTIONS
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
 		if arg == "-s" {
 			interactiveMode = false
-		}
-		if arg == "-n" && i+1 < len(os.Args) {
+		} else if arg == "-n" && i+1 < len(os.Args) {
 			nodeNum = os.Args[i+1]
+			i++
 		}
 	}
 
@@ -36,166 +55,173 @@ func main() {
 		os.Exit(1)
 	}
 
-	// --- 2. DATA VARIABLES ---
+	// 2. DATA VARIABLES
 	timestamp := time.Now().Format("20060102")
+	instanceArr := []string{"bancsarc" + nodeNum, "bancsdb" + nodeNum, "bancsrep" + nodeNum}
+
 	oracleBase := os.Getenv("ORACLE_BASE")
 	if oracleBase == "" {
-		fmt.Println("ERROR: ORACLE_BASE not set.")
+		fmt.Println("ERROR: ORACLE_BASE is not set.")
 		os.Exit(1)
 	}
 
-	oraclePath := "/home/oracle"
-	mainDir = filepath.Join(oraclePath, timestamp+"_healthcheck_19C")
-	nodeDir = filepath.Join(mainDir, "NODE"+nodeNum)
-	instances := []string{"bancsarc" + nodeNum, "bancsdb" + nodeNum, "bancsrep" + nodeNum}
-
-	// Cluster Paths
-	crsctlPath := "/u01/app/19.0.0/grid/bin/crsctl"
-	crsLogPath := fmt.Sprintf("/u01/app/grid/diag/crs/pdsbancsv6db%sp/crs/trace/alert.log", nodeNum)
-	asmLogPath := fmt.Sprintf("/u01/app/grid/diag/asm/+asm/+ASM%s/trace/alert_+ASM%s.log", nodeNum, nodeNum)
+	mainDir := filepath.Join(oraclePath, fmt.Sprintf("%s_healthcheck_%s", timestamp, odbVersion))
+	nodeDir := filepath.Join(mainDir, "NODE"+nodeNum)
+	crsLogPath := fmt.Sprintf("/u01/app/grid/diag/crs/pdsbancsv6db%sp/crs/trace", nodeNum)
+	asmLogPath := fmt.Sprintf("/u01/app/grid/diag/asm/+asm/+ASM%s/trace", nodeNum)
 
 	fmt.Printf("Starting Production Health Check for Node %s...\n", nodeNum)
 
-	// --- 3. DIRECTORY SETUP ---
-	for _, inst := range instances {
+	// 3. DIRECTORY SETUP
+	// Mirroring the 'cd ${oracle_path}' from bash
+	os.Chdir(oraclePath)
+	for _, inst := range instanceArr {
 		os.MkdirAll(filepath.Join(nodeDir, inst), 0755)
 	}
+	// Mirroring 'cd ${node_dir}' from bash
+	os.Chdir(nodeDir)
 
-	// --- 4. OS & CLUSTER COLLECTION ---
-	runAndVerify(filepath.Join(nodeDir, "FS.txt"), "df", "-h")
-	runAndVerify(filepath.Join(nodeDir, "top.txt"), "sh", "-c", "top -b -n 1 | head -n 30")
+	// 4. OS COLLECTIONS
+	runAndRedirect("FS.txt", "df", "-h")
+	verifyFile(filepath.Join(nodeDir, "FS.txt"), nodeDir)
 
-	if nodeNum != "2" { // Equivalent to crs_skip=(2)
-		runAndVerify(filepath.Join(nodeDir, "crs.txt"), crsctlPath, "stat", "res", "-t")
+	runAndRedirect("top.txt", "sh", "-c", "top -b -n 1 | head -n 30")
+	verifyFile(filepath.Join(nodeDir, "top.txt"), nodeDir)
+
+	if !contains(crsSkip, nodeNum) {
+		runAndRedirect("crs.txt", "/u01/app/19.0.0/grid/bin/crsctl", "stat", "res", "-t")
+		verifyFile(filepath.Join(nodeDir, "crs.txt"), nodeDir)
 	}
-	runAndVerify(filepath.Join(nodeDir, "lstnr.txt"), "lsnrctl", "status")
 
-	// --- 5. LOG COLLECTION ---
-	for _, inst := range instances {
-		// instance%? logic: bancsdb1 -> bancsdb
+	runAndRedirect("lstnr.txt", "lsnrctl", "status")
+	verifyFile(filepath.Join(nodeDir, "lstnr.txt"), nodeDir)
+
+	// 5. COPY LOGS
+	for _, inst := range instanceArr {
 		dbName := inst[:len(inst)-1]
 		src := filepath.Join(oracleBase, "diag/rdbms", dbName, inst, "trace", "alert_"+inst+".log")
-		dst := filepath.Join(nodeDir, inst, "alert_"+inst+".log")
+		dst := filepath.Join(nodeDir, inst)
 		exec.Command("cp", "-p", src, dst).Run()
-		verifyFile(dst)
+		verifyFile(filepath.Join(dst, "alert_"+inst+".log"), nodeDir)
 	}
-	
-	copyAndVerify(crsLogPath, filepath.Join(nodeDir, "crs"+nodeNum+"_alert.log"))
-	copyAndVerify(asmLogPath, filepath.Join(nodeDir, "asm"+nodeNum+"_alert.log"))
 
-	// --- 6. SQL EXECUTION ---
-	allNodesFiles := []string{"BLOCKING_1.txt", "BLOCKING_2.txt", "inactive_session.txt", "LONGOPS.txt", "parameter.txt", "session.txt"}
-	specNodesFiles := []string{"dba_data_files.txt", "dba_segments.txt", "datafiles.txt", "table_usage.txt", "LOCKED_OBJECTS.txt", "tablespace_2.txt", "tablespace_with_temporaryTBS.txt", "ASM.txt", "asm_diskgroup.txt", "controlfile.txt", "dba_indexes.txt", "Vlog.txt", "uptime.txt", "invalid_objects.txt", "check_backup.txt", "check_if_sync.txt", "backup_status.txt", "archivelog_volume.txt", "select_all_redo_logs.txt"}
+	exec.Command("cp", "-p", filepath.Join(crsLogPath, "alert.log"), filepath.Join(nodeDir, "crs"+nodeNum+"_alert.log")).Run()
+	verifyFile(filepath.Join(nodeDir, "crs"+nodeNum+"_alert.log"), nodeDir)
 
-	for _, inst := range instances {
-		fmt.Printf("\n--- Processing Database Instance: %s ---\n", inst)
+	exec.Command("cp", "-p", filepath.Join(asmLogPath, "alert_+ASM"+nodeNum+".log"), filepath.Join(nodeDir, "asm"+nodeNum+"_alert.log")).Run()
+	verifyFile(filepath.Join(nodeDir, "asm"+nodeNum+"_alert.log"), nodeDir)
 
-		// A. Global Reports
-		runSQL(inst, "hc_global_reports.sql", mainDir)
-		// Check the generated CSV
-		csvs, _ := filepath.Glob(filepath.Join(mainDir, "*.csv"))
-		if len(csvs) > 0 {
-			verifyFile(csvs[len(csvs)-1]) // Verify newest CSV
-		}
+	// 6. DATABASE SQL CHECKS
+	for _, inst := range instanceArr {
+		fmt.Printf("\n--- Processing Instance: %s ---\n", inst)
+		os.Setenv("ORACLE_SID", inst)
 
-		// B. All Nodes
-		runSQL(inst, "hc_all_nodes.sql", filepath.Join(nodeDir, inst))
+		// A. Global Reports (cd main_dir)
+		os.Chdir(mainDir)
+		runEmbeddedSQL("hc_global_reports.sql")
+		checkLatestCSV(mainDir, nodeDir)
+
+		// B. All Nodes (cd node_dir/instance)
+		instPath := filepath.Join(nodeDir, inst)
+		os.Chdir(instPath)
+		runEmbeddedSQL("hc_all_nodes.sql")
 		for _, f := range allNodesFiles {
-			verifyFile(filepath.Join(nodeDir, inst, f))
+			verifyFile(filepath.Join(instPath, f), nodeDir)
 		}
 
 		// C. AWR Generation
-		runAWR(inst, nodeNum, filepath.Join(nodeDir, inst))
+		generateAWR(inst, instPath, nodeDir)
 
-		// D. Specific Nodes (Skip node 2)
-		if nodeNum != "2" {
-			runSQL(inst, "hc_specific_nodes.sql", filepath.Join(nodeDir, inst))
+		// D. Specific Nodes
+		if !contains(sqlCheckSkip, nodeNum) {
+			runEmbeddedSQL("hc_specific_nodes.sql")
 			for _, f := range specNodesFiles {
-				verifyFile(filepath.Join(nodeDir, inst, f))
+				verifyFile(filepath.Join(instPath, f), nodeDir)
 			}
 		}
 	}
 
-	fmt.Println("\nProduction Health Check Completed successfully.")
+	fmt.Println("\nProduction Health Check Completed Successfully.")
 }
 
-// --- HELPER FUNCTIONS ---
+// --- HELPERS ---
 
-func runSQL(sid string, scriptPath string, workingDir string) {
-	content, _ := sqlScripts.ReadFile(scriptPath)
+func runEmbeddedSQL(scriptName string) {
+	content, err := sqlScripts.ReadFile(scriptName)
+	if err != nil {
+		fmt.Printf("Internal Error: Could not find embedded script %s\n", scriptName)
+		return
+	}
 	cmd := exec.Command("sqlplus", "-s", "/", "as", "sysdba")
-	cmd.Dir = workingDir
-	cmd.Env = append(os.Environ(), "ORACLE_SID="+sid)
 	cmd.Stdin = strings.NewReader(string(content))
 	cmd.Run()
 }
 
-func runAWR(sid string, nodeNum string, workingDir string) {
-	// 1. Get Snaps
-	snapContent, _ := sqlScripts.ReadFile("get_snaps.sql")
-	// Note: For AWR complex logic, passing args to stdin requires careful formatting
-	// Simulating the bash logic:
+func generateAWR(sid, instPath, nodeDir string) {
+	fmt.Printf("Generating AWR for %s...\n", sid)
+	
+	snapScript, _ := sqlScripts.ReadFile("get_snaps.sql")
 	snapCmd := exec.Command("sqlplus", "-s", "/", "as", "sysdba")
-	snapCmd.Env = append(os.Environ(), "ORACLE_SID="+sid)
-	snapCmd.Stdin = strings.NewReader(string(snapContent))
-	snapIDs, _ := snapCmd.Output()
+	snapCmd.Stdin = strings.NewReader(string(snapScript))
+	out, _ := snapCmd.Output()
 	
-	ids := strings.Fields(string(snapIDs))
-	if len(ids) < 2 { return }
+	snaps := strings.Fields(string(out))
+	if len(snaps) < 2 { return }
 
-	awrName := filepath.Join(workingDir, fmt.Sprintf("awrrpt_%s_%s_%s.html", sid, ids[0], ids[1]))
+	awrName := filepath.Join(instPath, fmt.Sprintf("awrrpt_%s_%s_%s.html", nodeNum, snaps[0], snaps[1]))
 	
-	// 2. Generate AWR
-	awrContent, _ := sqlScripts.ReadFile("generate_awrrpt.sql")
-	// Prepend defines to the script
-	fullAwrScript := fmt.Sprintf("define 1=%s\ndefine 2=%s\ndefine 3=%s\n%s", ids[0], ids[1], awrName, string(awrContent))
+	awrScript, _ := sqlScripts.ReadFile("generate_awrrpt.sql")
+	// Passing variables to SQLPlus Stdin via defining them at the top of the script
+	fullScript := fmt.Sprintf("define 1=%s\ndefine 2=%s\ndefine 3=%s\n%s", snaps[0], snaps[1], awrName, string(awrScript))
 	
 	genCmd := exec.Command("sqlplus", "-s", "/", "as", "sysdba")
-	genCmd.Env = append(os.Environ(), "ORACLE_SID="+sid)
-	genCmd.Stdin = strings.NewReader(fullAwrScript)
+	genCmd.Stdin = strings.NewReader(fullScript)
 	genCmd.Run()
-
-	verifyFile(awrName)
+	
+	verifyFile(awrName, nodeDir)
 }
 
-func verifyFile(path string) {
-	if !interactiveMode { return }
+func checkLatestCSV(dir, nodeDir string) {
+	files, _ := filepath.Glob(filepath.Join(dir, "*.csv"))
+	if len(files) == 0 { return }
+	latest := files[0]
+	for _, f := range files {
+		if fi, _ := os.Stat(f); fi != nil {
+			if curr, _ := os.Stat(latest); fi.ModTime().After(curr.ModTime()) {
+				latest = f
+			}
+		}
+	}
+	verifyFile(latest, nodeDir)
+}
 
+func verifyFile(path string, cleanupDir string) {
+	if !interactiveMode { return }
 	fmt.Printf("\n==================================================\n")
 	fmt.Printf("REVIEWING FILE: %s\n", path)
 	fmt.Printf("==================================================\n")
-
 	if strings.HasSuffix(path, ".html") {
-		fmt.Println("[HTML Content hidden for readability]")
+		fmt.Println("[HTML File Detected: Content hidden to prevent terminal clutter]")
 	} else {
 		content, _ := os.ReadFile(path)
-		fmt.Println(string(content))
+		fmt.Print(string(content))
 	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Println("Error: File not found for review.")
-	} else {
-		fmt.Println(string(content))
-	}
-
-	fmt.Printf("\nAction: [ENTER] to continue | [X] to abort and delete\n>> ")
+	fmt.Printf("\nAction: [ENTER] to continue | [X] to abort and delete all\n>> ")
+	
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 	if strings.ToUpper(strings.TrimSpace(input)) == "X" {
-		os.RemoveAll(nodeDir)
-		fmt.Println("Cleaned up and exited.")
+		os.RemoveAll(cleanupDir)
 		os.Exit(0)
 	}
 }
 
-func runAndVerify(path string, name string, args ...string) {
+func runAndRedirect(outFile string, name string, args ...string) {
 	out, _ := exec.Command(name, args...).CombinedOutput()
-	os.WriteFile(path, out, 0644)
-	verifyFile(path)
+	os.WriteFile(outFile, out, 0644)
 }
 
-func copyAndVerify(src string, dst string) {
-	exec.Command("cp", "-p", src, dst).Run()
-	verifyFile(dst)
+func contains(slice []string, val string) bool {
+	for _, item := range slice { if item == val { return true } }
+	return false
 }

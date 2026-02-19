@@ -3,7 +3,7 @@ service ssh start
 
 # Define the base where mocks will live
 MOCK_BASE=/tmp/oracle_mock
-mkdir -p /home/oracle/scripts
+mkdir -p /home/oracle/binaries
 
 # =================================================================
 # 1. ENVIRONMENT SPECIFIC SETUP (DIRECTORY CREATION)

@@ -1,0 +1,40 @@
+services:
+  node1:
+    build: .
+    hostname: pdsbancsv6db1p
+    container_name: pdsbancsv6db1p
+    networks:
+      oracle_net:
+        ipv4_address: 172.20.0.11
+    volumes:
+      - ./binaries/:/home/oracle/binaries
+      - ./prod_collector/:/home/oracle/prod_collector
+
+  node2:
+    build: .
+    hostname: pdsbancsv6db2p
+    container_name: pdsbancsv6db2p
+    networks:
+      oracle_net:
+        ipv4_address: 172.20.0.12
+    volumes:
+      - ./binaries/:/home/oracle/binaries
+      - ./prod_collector/:/home/oracle/prod_collector
+
+  dr_server:
+    build: .
+    hostname: pdsbancsv6db1d
+    container_name: pdsbancsv6db1d
+    networks:
+      oracle_net:
+        ipv4_address: 172.20.0.13
+    volumes:
+      - ./binaries/:/home/oracle/binaries
+      - ./dr_collector/:/home/oracle/dr_collector
+
+networks:
+  oracle_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
