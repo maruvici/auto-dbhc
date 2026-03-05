@@ -22,6 +22,7 @@ format:
         \usepackage{adjustbox}
         \usepackage[table]{xcolor}
         \usepackage{tabularx}
+        
 execute:
   echo: false
   warning: false

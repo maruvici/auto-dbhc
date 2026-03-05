@@ -2,10 +2,133 @@ import shutil
 import re
 import io
 import sys
+import os
+import time
 import pandas as pd
 from pathlib import Path
 from typing import Optional
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
+
+def parse_alert_log(file: Path, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+    """
+    Parses an Oracle alert log to extract notable errors and their timestamps
+    strictly within the time window defined by start_date and end_date (YYYYMMDD).
+    """
+    if not file.exists():
+        return None
+
+    # Define the exact time window
+    try:
+        start_dt = datetime.strptime(start_date, "%Y%m%d")
+        # Extend end_dt to the very end of the specified day
+        end_dt = datetime.strptime(end_date, "%Y%m%d").replace(hour=23, minute=59, second=59)
+    except ValueError as e:
+        print(f"Error: Invalid date format. Expected YYYYMMDD. Details: {e}")
+        return None
+
+    # Date patterns for Oracle 19c
+    iso_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}')
+    legacy_pattern = re.compile(r'^\w{3} \w{3} \s?\d{1,2} \d{2}:\d{2}:\d{2} \d{4}')
+    
+    # Target keywords (will be checked against uppercase strings)
+    keywords = ['ORA-', 'WARNING', 'FATAL NI']
+    ignore_patterns = ['ORA-0', 'completed successfully', 'LICENSE_SESSIONS_WARNING']
+
+    notable_events = []
+    current_timestamp_str = "Unknown"
+    current_block = []
+    has_notable_keyword = False
+    is_within_window = False
+
+    try:
+        with open(file, 'r', encoding='utf-8', errors='ignore') as f:
+            for line in f:
+                clean_line = line.strip()
+                if not clean_line:
+                    continue
+
+                # Check for new timestamp
+                is_iso = iso_pattern.match(clean_line)
+                is_legacy = legacy_pattern.match(clean_line)
+
+                if is_iso or is_legacy:
+                    # 1. Process the PREVIOUS block before resetting
+                    if is_within_window and has_notable_keyword and current_block:
+                        full_message = "\n".join(current_block)
+                        if not any(noise in full_message for noise in ignore_patterns):
+                            notable_events.append({
+                                "Timestamp": current_timestamp_str,
+                                "Message": full_message
+                            })
+                    
+                    # 2. Reset for the NEW block
+                    current_timestamp_str = clean_line
+                    current_block = []
+                    has_notable_keyword = False
+                    
+                    # 3. Determine if the NEW timestamp is within our window
+                    try:
+                        if is_iso:
+                            # Parse ISO 8601 (e.g., 2026-02-06T14:22:33.123+08:00)
+                            ts_part = clean_line.split('+')[0].split('.')[0]
+                            this_dt = datetime.fromisoformat(ts_part)
+                        else:
+                            # Parse Legacy (e.g., Fri Feb 06 14:22:33 2026)
+                            this_dt = datetime.strptime(clean_line, "%a %b %d %H:%M:%S %Y")
+                        
+                        is_within_window = (start_dt <= this_dt <= end_dt)
+                    except (ValueError, IndexError):
+                        is_within_window = False
+                    
+                    continue
+
+                # If we are currently in a valid time window, collect the lines
+                if is_within_window:
+                    current_block.append(clean_line)
+                    # Use uppercase for case-insensitive matching
+                    upper_line = clean_line.upper()
+                    if any(key in upper_line for key in keywords):
+                        has_notable_keyword = True
+
+            # Save the final block if it meets criteria
+            if is_within_window and has_notable_keyword and current_block:
+                full_message = "\n".join(current_block)
+                if not any(noise in full_message for noise in ignore_patterns):
+                    notable_events.append({
+                        "Timestamp": current_timestamp_str,
+                        "Message": full_message
+                    })
+
+    except Exception as e:
+        print(f"  -> Error parsing alert log {file.name}: {e}")
+        return None
+
+    return pd.DataFrame(notable_events) if notable_events else None
+
+def aggregate_alert_logs(df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    """
+    Takes the parsed alert logs DataFrame and returns a summary table 
+    containing unique errors, their occurrence counts, and timestamps.
+    """
+    if df is None or df.empty:
+        return None
+
+    # Group by the exact message text
+    # The lambda function joins all timestamps into a single readable string
+    aggregated = df.groupby('Message', as_index=False).agg(
+        Occurrences=('Timestamp', 'count'),
+        Timestamps=('Timestamp', lambda x: ' | '.join(x))
+    )
+    
+    # Sort by the most frequent occurrences first
+    aggregated = aggregated.sort_values(by='Occurrences', ascending=False).reset_index(drop=True)
+    
+    # Reorder columns for a logical flow in your final Excel file
+    aggregated = aggregated[['Message', 'Occurrences', 'Timestamps']]
+    
+    return aggregated
 
 def parse_spool_file(file: Path) -> Optional[pd.DataFrame]:
     """
@@ -225,7 +348,7 @@ def parse_awrrpt_file(file: Path) -> Optional[pd.DataFrame]:
         print(f"Error parsing AWR: {e}")
         return None
 
-def run_etl(src_path, dest_path):
+def run_etl(src_path, dest_path, start_date, end_date):
     """
     Main function to process all defined files.
     """
@@ -249,6 +372,11 @@ def run_etl(src_path, dest_path):
 
     server_arr = ("DR", "NODE1", "NODE2")
     instance_arr = ("bancsarc", "bancsdb", "bancsrep")
+    alert_instance_arr = [
+        'drarcdb', 'droprdb', 'drrepdb',
+        'bancsarc1', 'bancsdb1', 'bancsrep1',
+        'bancsarc2', 'bancsdb2', 'bancsrep2'
+    ]
     files_map = {} # Configuration: Input Path -> Output CSV
 
     # Node 1 Only
@@ -295,6 +423,16 @@ def run_etl(src_path, dest_path):
             else:
                 print(f"No AWRRPT.html file found in {target_dir}")
 
+    # Alert Log Reports
+    for i, instance in enumerate(alert_instance_arr):
+        if i >= 0 and i < 3:
+            server = "DR"
+        elif i >= 3 and i < 6:
+            server = "NODE1"
+        else:
+            server = "NODE2"
+        files_map[curr_dir / f"{server}" / instance / f"alert_{instance}.log" ] = output_dir / f"alert_logs_raw_{instance}.csv"
+
     print("--- Starting ETL Process ---")
     for input_file, output_file in files_map.items():
         print(f"Processing {str(input_file)}...")
@@ -310,13 +448,22 @@ def run_etl(src_path, dest_path):
             df = parse_fs_file(input_file)
         elif re.search(f"awrrpt", str(output_file)):
             df = parse_awrrpt_file(input_file)
+        elif re.search(f"alert", str(output_file)):
+            df = parse_alert_log(input_file, start_date, end_date)
         else:
             df = parse_spool_file(input_file)
         
         if df is not None:
-            # We save even empty DFs so the QMD file doesn't crash when looking for the file
             df.to_csv(output_file, index=False)
             print(f"  -> Saved to {output_file} ({len(df)} rows)")
+            if "alert_logs_raw_" in output_file.name:
+                instance_name = output_file.stem.replace("alert_logs_raw_", "")
+                filtered_logs_file = output_dir / f"alert_logs_filtered_{instance_name}.csv"
+
+                filtered_df = aggregate_alert_logs(df)
+                print(f"  -> Generating filtered logs for {instance_name}...")
+                filtered_df.to_csv(filtered_logs_file, index=False)
+                print(f"  -> Filtered logs saved to {filtered_logs_file.name}")
         else:
             # Create a dummy CSV with error message or empty to prevent file-not-found errors
             print(f"  -> Warning: Could not parse {input_file}")
@@ -325,11 +472,9 @@ def run_etl(src_path, dest_path):
     print("--- ETL Complete ---")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        src_path = sys.argv[1]
-        dest_path = sys.argv[2]
-        print(f"Accessing data at: {src_path}")
-        run_etl(src_path, dest_path)
-        print(f"Extracted data stored in: {dest_path}")
+    if len(sys.argv) > 4:
+        print(f"Accessing data at: {sys.argv[1]}")
+        run_etl(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+        print(f"Extracted data stored in: {sys.argv[2]}")
     else:
-        print("Please follow the format: python3 script_name [src_path] [dest_path]")
+        print("Please follow the format: python3 script_name [src_path] [dest_path] [start_date] [end_date]")

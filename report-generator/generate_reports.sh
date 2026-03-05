@@ -1,4 +1,21 @@
 #!/bin/bash
+source .venv/bin/activate
+
+# ================================
+#       HELPER FUNCTIONS
+# ================================
+# Function to validate and format date
+format_date() {
+    local input_date=$1
+    # Attempt to convert the input date to YYYYMMDD
+    # 'date -d' is common in GNU/Linux. For macOS (BSD), use 'date -j -f'
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        formatted=$(date -j -f "%Y-%m-%d" "$input_date" "+%Y%m%d" 2>/dev/null)
+    else
+        formatted=$(date -d "$input_date" "+%Y%m%d" 2>/dev/null)
+    fi
+    echo "$formatted"
+}
 
 # ================================
 #       ONEDRIVE DIR SETUP
@@ -6,12 +23,8 @@
 
 DATA_PATH="./dbhc_onedrive/dbhc_data"
 EXTRACTED_DATA_PATH="./dbhc_onedrive/dbhc_extracted_data"
+MANUAL_DATA_PATH="./dbhc_onedrive/dbhc_manual"
 REPORTS_PATH="./dbhc_onedrive/dbhc_reports"
-
-# ===========================
-#       DATA EXTRACTION
-# ===========================
-source .venv/bin/activate
 
 # <-- HANDLE OPTIONS -->
 skip_extraction=false;
@@ -31,56 +44,81 @@ for arg in "$@"; do
   esac
 done
 
+# ===========================
+#       DATA EXTRACTION
+# ===========================
+
 if [ "${skip_extraction}" = false ]; then
-    echo "Starting Data Extraction..."
-    # 0. Extract data
-    python3 data_extractor.py ${DATA_PATH} ${EXTRACTED_DATA_PATH}
-    echo "Done. Data is ready."
+  while true; do
+    read -p "Enter Start Date of Alert Log Check (YYYY-MM-DD): " START_INPUT
+    read -p "Enter End Date of Alert Log Check (YYYY-MM-DD): " END_INPUT
+
+    START_TRANSFORMED=$(format_date "$START_INPUT")
+    END_TRANSFORMED=$(format_date "$END_INPUT")
+
+    if [[ -n "$START_TRANSFORMED" && -n "$END_TRANSFORMED" ]]; then
+        echo "-------------------------------------"
+        echo "Start Date: $START_TRANSFORMED"
+        echo "End Date:   $END_TRANSFORMED"
+        echo "-------------------------------------"
+        break
+    else
+        echo "Error: One or both dates are invalid. Please use YYYY-MM-DD format."
+        echo ""
+    fi
+  done
+  echo "Starting Data Extraction..."
+  python3 data_extractor.py ${DATA_PATH} ${EXTRACTED_DATA_PATH} ${START_TRANSFORMED} ${END_TRANSFORMED}
+  echo "Done. Data is ready."
 fi
 
 # ===========================
 #     REPORT GENERATION
 # ===========================
 
-STAMP=$(ls -d ${EXTRACTED_DATA_PATH}/* | sort | tail -n 1 | xargs basename)
-mkdir -p "dbhc_manual/${STAMP}/assets"
-if [[ ! -f "dbhc_manual/${STAMP}/findings.yml" ]]; then
-  cp "dbhc_manual/template_findings.yml" "dbhc_manual/${STAMP}/findings.yml"
-fi
-OUT_DIR="${REPORTS_PATH}/${STAMP}"
-mkdir -p "$OUT_DIR"
-SCRIPT_DIR="./dbhc_report_qmd"
-cd "$SCRIPT_DIR"
-
 if [ "${skip_generation}" = false ]; then
-    echo "Starting Report Generation for REPORT $STAMP..."
+  # Directory and Variable Setup
+  PDF_NAME="dbhc_report.pdf"
+  HTML_NAME="dbhc_report.html"
+  STAMP=$(ls -d ${EXTRACTED_DATA_PATH}/* | sort | tail -n 1 | xargs basename)
 
-    PDF_NAME="dbhc_report.pdf"
-    HTML_NAME="dbhc_report.html"
+  if [[ ! -f "${MANUAL_DATA_PATH}/${STAMP}/findings.docx" ]]; then
+    cp "${MANUAL_DATA_PATH}/template_findings.docx" "${MANUAL_DATA_PATH}/${STAMP}/findings.docx"
+  fi
+  if [[ ! -f "${MANUAL_DATA_PATH}/${STAMP}/alert_logs.xlsx" ]]; then
+    cp "${MANUAL_DATA_PATH}/template_alert_logs.xlsx" "${MANUAL_DATA_PATH}/${STAMP}/alert_logs.xlsx"
+  fi
 
-    # 1. Render PDF
-    quarto render pdf_generator.qmd --to pdf --output "$PDF_NAME"
+  OUT_DIR="${REPORTS_PATH}/${STAMP}"
+  mkdir -p "$OUT_DIR"
+  SCRIPT_DIR="./dbhc_report_qmd"
+  cd "$SCRIPT_DIR"
 
-    # 2. Render HTML
-    quarto render html_generator.qmd --to html --output "$HTML_NAME"
+  echo "Starting Report Generation for REPORT $STAMP..."
 
-    # 3. --- AUTOMATED CLEANUP ---
-    echo "Cleaning up residual files..."
+  # 1. Render PDF
+  quarto render pdf_generator.qmd --to pdf --output "$PDF_NAME"
 
-    # Remove the .tex file
-    rm -f pdf_generator.tex
+  # 2. Render HTML
+  quarto render html_generator.qmd --to html --output "$HTML_NAME"
 
-    # Remove the auxiliary directories created by Quarto
-    rm -rf pdf_generator_files
-    rm -rf html_generator_files
+  # 3. --- AUTOMATED CLEANUP ---
+  echo "Cleaning up residual files..."
 
-    # Optional: Remove the site_libs folder if generated for HTML
-    rm -rf site_libs
+  # Remove the .tex file
+  rm -f pdf_generator.tex
 
-    # 4. Move final outputs
-    cd ..
-    mv "${SCRIPT_DIR}/${PDF_NAME}" "$OUT_DIR"
-    mv "${SCRIPT_DIR}/${HTML_NAME}" "$OUT_DIR"
+  # Remove the auxiliary directories created by Quarto
+  rm -rf pdf_generator_files
+  rm -rf html_generator_files
 
-    echo "Done. Reports are ready in $OUT_DIR"
+  # Optional: Remove the site_libs folder if generated for HTML
+  rm -rf site_libs
+
+  # 4. Move final outputs
+  cd ..
+  mv "${SCRIPT_DIR}/${PDF_NAME}" "$OUT_DIR"
+  mv "${SCRIPT_DIR}/${HTML_NAME}" "$OUT_DIR"
+
+  echo "Done. Reports are ready in $OUT_DIR"
 fi

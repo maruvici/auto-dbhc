@@ -5,7 +5,7 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
 0. Create corresponding symbolic link to the following OneDrive directory:
     - `ln -s <OneDriveDirectory> dbhc_onedrive`
     - Default OneDrive Directory Location:
-        - WSL: /mnt/c/Users/\<user\>/'Strategic Synergy Incorporated'/'Marqueses, Alexis Rafael F. - DB FILES'/'PDS - Oracle'/'PDS - Database'/DBHC/
+        - WSL: /mnt/c/Users/\<user\>/'Strategic Synergy Incorporated'/'Marqueses, Alexis Rafael F. - DB FILES'/'PDS - Oracle'/'PDS - Database'/'DB Health Checks'/
 1. Ensure latest `data-collector` generated data is in `dbhc_data` directory
 2. Install Dependencies (In-Order)
     - Python
