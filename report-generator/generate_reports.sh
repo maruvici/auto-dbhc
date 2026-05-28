@@ -1,5 +1,11 @@
 #!/bin/bash
-source .venv/bin/activate
+
+# Only activate .venv if not running inside a Docker container
+if [ ! -f /.dockerenv ]; then
+    if [ -d ".venv" ]; then
+        source .venv/bin/activate
+    fi
+fi
 
 # ================================
 #       HELPER FUNCTIONS
@@ -82,6 +88,8 @@ if [ "${skip_generation}" = false ]; then
   HTML_NAME="dbhc_report.html"
   STAMP=$(ls -d ${EXTRACTED_DATA_PATH}/* | sort | tail -n 1 | xargs basename)
 
+  mkdir -p "${MANUAL_DATA_PATH}/${STAMP}"
+
   if [[ ! -f "${MANUAL_DATA_PATH}/${STAMP}/findings.docx" ]]; then
     cp "${MANUAL_DATA_PATH}/template_findings.docx" "${MANUAL_DATA_PATH}/${STAMP}/findings.docx"
   fi
@@ -112,7 +120,7 @@ if [ "${skip_generation}" = false ]; then
   rm -rf pdf_generator_files
   rm -rf html_generator_files
 
-  # Optional: Remove the site_libs folder if generated for HTML
+  # Remove the site_libs folder if generated for HTML
   rm -rf site_libs
 
   # 4. Move final outputs

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def parse_alert_log(file: Path, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
     """

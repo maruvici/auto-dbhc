@@ -72,5 +72,6 @@ Scripts to automatically generate Oracle Database Health Checkup (DBHC) report. 
 - ~~feat: Add data extractor in automation scripts~~
 - ~~feat: Implement manual input for findings~~
 - ~~refactor: Make data compatible with OneDrive~~
-- feat: Add Executive Summary part
-- docs: Generate completed README.md
+- ~~feat: Add Executive Summary part~~
+- ~~docs: Generate completed README.md~~
+- ~~refactor: Dockerize application~~

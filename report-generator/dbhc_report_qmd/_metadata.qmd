@@ -2,4 +2,4 @@
 subtitle: "Philippine Dealing System / Strategic Synergy Inc."
 author: "SSI Digital Transformation Team / {Insert Names}"
 date: today
-date-format: "MMMM YYYY"
+date-format: long

@@ -159,7 +159,7 @@ def style_impact(df, html=True):
     def get_rgb(val):
         val_str = str(val).upper()
         if 'HIGH' in val_str: return (1.0, 0.70, 0.67)      # #ffb3ab (Light Red)
-        if 'MODERATE' in val_str: return (1.0, 0.97, 0.64)  # #fff7a3 (Cream/Yellow)
+        if 'MEDIUM' in val_str: return (1.0, 0.97, 0.64)  # #fff7a3 (Cream/Yellow)
         if 'LOW' in val_str: return (0.73, 0.97, 0.75)      # #b9f8be (Light Green)
         return None
 
@@ -272,8 +272,8 @@ def calc_growth(inst, mode="physical"):
 
 def get_finding(key):
     """
-    Extracts content from a .docx file based on a 'KEY: name' delimiter.
-    Supports horizontal lines, images, and complex formatting.
+    Extracts content and type from a .docx file based on 'TYPE: key' delimiter.
+    Maintains all original image, path, and cleanup logic.
     """
     # 1. Resolve File Paths
     current_dir_name = curr_dir.name 
@@ -283,67 +283,67 @@ def get_finding(key):
         findings_path = Path(f"{manual_dir}/{current_dir_name}/template_findings.docx")
         
     if not findings_path.exists():
-        return "*(Document not found)*"
+        return {"type": "note", "content": "*(Document not found)*"}
 
     # 2. Convert Word to Markdown
     try:
-        # We extract media to the same folder as the findings file
         raw_markdown = pypandoc.convert_file(
             str(findings_path), 
             'markdown', 
             extra_args=[f'--extract-media={findings_path.parent}', '--wrap=none']
         )
     except Exception:
-        return "*(Error: Pandoc failed to process the document)*"
+        return {"type": "note", "content": "*(Error: Pandoc failed to process the document)*"}
 
     # 3. Split Document into Sections
-    # This regex looks for 'KEY: name' regardless of bolding (**), blockquotes (>), or casing
-    # The [a-z0-9_]+ ensures we capture keys like 'awr_1' or 'db_size'
-    delimiter_pattern = r'(?i)[>\s]*(?:\*\*)?KEY:\s*([a-z0-9_]+)(?:\*\*)?[>\s]*'
+    # Captures (TYPE) and (key)
+    delimiter_pattern = r'(?i)[>\s]*(?:\*\*)?(TIP|NOTE|IMPORTANT|WARNING|CAUTION):\s*([a-z0-9_\\]+)(?:\*\*)?[>\s]*'
     document_parts = re.split(delimiter_pattern, raw_markdown)
     
     findings_map = {}
     
-    # Iterate through parts (Key is index i, Content is index i+1)
-    for i in range(1, len(document_parts), 2):
-        section_key = document_parts[i].lower().strip()
-        raw_content = document_parts[i+1]
+    # Iterate through parts: (Type at i, Key at i+1, Content at i+2)
+    for i in range(1, len(document_parts), 3):
+        f_type = document_parts[i].lower().strip()
+        section_key = document_parts[i+1].lower().replace('\\', '').strip()
+        raw_content = document_parts[i+2]
 
         # --- STEP-BY-STEP CONTENT CLEANING ---
-        
-        # A. Remove blockquote markers (>) added by Pandoc
         clean_text = re.sub(r'(?m)^[> ]+', '', raw_content)
-        
-        # B. Remove the "Bold Wrapper" ONLY if it wraps the entire block.
-        # This prevents breaking internal Bold+Italic (***text***) markers.
         clean_text = clean_text.strip()
         if clean_text.startswith("**") and clean_text.endswith("**"):
             clean_text = clean_text[2:-2].strip()
-
-        # C. Remove the Horizontal Line (--- or ***) that sits at the top
-        # We look for 3 or more dashes/asterisks at the start of the string
         clean_text = re.sub(r'^\s*[-*_]{3,}\s*', '', clean_text)
         
-        findings_map[section_key] = clean_text.strip()
-
-    # 4. Fetch the specific finding and format images
-    final_content = findings_map.get(key.lower(), "*(No findings recorded)*")
-    
-    if "![](media/" in final_content:
-        # Re-route local 'media/' to the SSI server's directory structure
-        server_media_path = f"{manual_dir}/{current_dir_name}/media/"
-        final_content = final_content.replace("![](media/", f"![]({server_media_path}")
+        # --- IMAGE HANDLING ---
+        if "![](media/" in clean_text:
+            server_media_path = f"{manual_dir}/{current_dir_name}/media/"
+            clean_text = clean_text.replace("![](media/", f"![]({server_media_path}")
+            clean_text = re.sub(
+                r'\.(png|jpe?g)\)', 
+                r'.\1){fig-align="center" width=85%}', 
+                clean_text, 
+                flags=re.IGNORECASE
+            )
         
-        # Center and scale images for professional Quarto PDF output
-        # Using a regex to handle .png, .jpg, and .jpeg in one go
-        final_content = re.sub(
-            r'\.(png|jpe?g)\)', 
-            r'.\1){fig-align="center" width=85%}', 
-            final_content, 
-            flags=re.IGNORECASE
-        )
+        findings_map[section_key] = {"type": f_type, "content": clean_text.strip()}
 
-    return final_content
+    # 4. Return result for the specific key
+    return findings_map.get(key.lower(), {"type": "note", "content": "*(No findings recorded)*"})
+
+def render_finding(key):
+    """
+    Fetches the finding and renders it in a Quarto callout.
+    """
+    result = get_finding(key)
+    f_type = result['type']
+    content = result['content']
+    
+    # Use the 'asis' output to inject the callout syntax
+    print(f"::: {{.callout-{f_type}}}")
+    print(f"## Findings and Recommendations")
+    print(f"\n{content}\n")
+    print(f":::")
     
 # --- GLOBAL DATA INITIALIZATION ---
 csv_dir = Path("../dbhc_onedrive/dbhc_extracted_data")
@@ -401,6 +401,11 @@ for inst in alert_instances:
     db_data[inst] = {"alert": load_excel_data(f"{inst.upper()}")}
 ```
 
+```{python}
+#| output: asis
+render_finding('readme')
+```
+
 # Executive Summary
 
 ::: {.panel-tabset}
@@ -428,7 +433,7 @@ for sec in sections:
                     results = df.loc[df[usage_pct] > tablespace_threshold, tablespace_names]
 
                     if len(results) > 0:
-                        tablespace_status = f"{", ".join(results)} is/are above {tablespace_threshold}% usage"
+                        tablespace_status = f"{', '.join(results)} is/are above {tablespace_threshold}% usage"
                     else:
                         tablespace_status = "Tablespaces are at a good level"
                 except Exception:
@@ -443,7 +448,7 @@ for sec in sections:
                     results = df.loc[df[backup_status] != "COMPLETED", backup_start_time]
 
                     if len(results) > 0:
-                        backup_status = f"Backups started on {", ".join(results)} is/are incomplete"
+                        backup_status = f"Backups started on {', '.join(results)} is/are incomplete"
                     else:
                         backup_status = "All backups on report are completed"
                 except Exception:
@@ -459,7 +464,7 @@ for sec in sections:
                     results = df.loc[df[primary_seq] != df[standby_seq], thread_num]
 
                     if len(results) > 0:
-                        dg_status = f"Primary and standby in thread/s {", ".join(results)} is/are out-of-sync"
+                        dg_status = f"Primary and standby in thread/s {', '.join(results)} is/are out-of-sync"
                     else:
                         dg_status = "Primary and standby are in-sync"
                 except Exception:
@@ -478,7 +483,7 @@ for sec in sections:
                     results = df.loc[df[usage_pct] > asm_threshold, asm_name]
 
                     if len(results) > 0:
-                        asm_status = f"Diskgroup {", ".join(results)} is/are above {asm_threshold}% usage"
+                        asm_status = f"Diskgroup {', '.join(results)} is/are above {asm_threshold}% usage"
                     else:
                         asm_status = f"All diskgroups are below {asm_threshold}% usage"
                 except Exception:
@@ -493,7 +498,7 @@ for sec in sections:
                     results = df.loc[df[usage_pct].str.strip('%').astype(int) > fs_threshold, fs_name]
 
                     if len(results) > 0:
-                        fs_status = f"Filesystem {", ".join(results)} is/are above {fs_threshold}% usage"
+                        fs_status = f"Filesystem {', '.join(results)} is/are above {fs_threshold}% usage"
                     else:
                         fs_status = f"All mounts are below {fs_threshold}% usage"
                 except Exception:
@@ -513,13 +518,10 @@ for sec in sections:
 ```
 :::
 
-::: {.callout-note}
-## Notable Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('summary')))
+render_finding('summary')
 ```
-:::
 
 # Database Report
 
@@ -568,13 +570,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('db_size')))
+render_finding('db_size')
 ```
-:::
 
 ## Tablespace Status
 
@@ -596,13 +595,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('tablespace')))
+render_finding('tablespace')
 ```
-:::
 
 ## Control File Status
 
@@ -619,13 +615,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('control_file')))
+render_finding('control_file')
 ```
-:::
 
 ## RMAN Backup Status
 
@@ -642,13 +635,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('rman_backup')))
+render_finding('rman_backup')
 ```
-:::
 
 ## Data Guard Status
 
@@ -665,13 +655,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('data_guard')))
+render_finding('data_guard')
 ```
-:::
 
 ## Invalid Object Status
 
@@ -688,13 +675,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('invalid_objects')))
+render_finding('invalid_objects')
 ```
-:::
 
 ## Log Switch Status
 
@@ -723,13 +707,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('log_switch')))
+render_finding('log_switch')
 ```
-:::
 
 # Server Details Report
 
@@ -742,13 +723,10 @@ if df is not None:
     smart_display(df)
 ```
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('asm')))
+render_finding('asm')
 ```
-:::
 
 ## File System Utilization Status
 
@@ -764,13 +742,10 @@ for server in servers:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('fs_util')))
+render_finding('fs_util')
 ```
-:::
 
 ## Cluster Resource Status
 ::: {.panel-tabset}
@@ -791,13 +766,10 @@ for server in servers:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('crs')))
+render_finding('crs')
 ```
-:::
 
 ## Listener Status
 ::: {.panel-tabset}
@@ -817,13 +789,10 @@ for server in servers:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('lstnr')))
+render_finding('lstnr')
 ```
-:::
 
 # AWR Report 
 
@@ -840,13 +809,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('awr_1')))
+render_finding('awr_1')
 ```
-:::
 
 
 ## NODE 2 AWR Report
@@ -862,13 +828,10 @@ for inst in instances:
 ```
 :::
 
-::: {.callout-note}
-## Findings and Recommendations
 ```{python}
 #| output: asis
-display(Markdown(get_finding('awr_2')))
+render_finding('awr_2')
 ```
-:::
 
 # Alert Logs Review
 
