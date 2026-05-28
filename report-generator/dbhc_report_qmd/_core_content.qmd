@@ -338,6 +338,9 @@ def render_finding(key):
     result = get_finding(key)
     f_type = result['type']
     content = result['content']
+
+    if content == "*(No findings recorded)*":
+        return
     
     # Use the 'asis' output to inject the callout syntax
     print(f"::: {{.callout-{f_type}}}")
