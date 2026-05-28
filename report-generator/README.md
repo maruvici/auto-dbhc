@@ -22,6 +22,7 @@ dbhc_onedrive/
     - **Requires extracting data first to function properly**
   - Running the command with no options will trigger both data extraction and report generation.
 - For manual sections of the report, update the corresponding .docx and .xlsx files in `dbhc_manual` then run the image again.
+- To revise the report's metadata (e.g. author, date), update `dbhc_report_qmd/_metadata.qmd`.
 
 ## ARCHITECTURE & DESIGN
 ### Pipeline Lifecycle & Technology Stack
