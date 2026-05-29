@@ -15,7 +15,7 @@ dbhc_onedrive/
 ## Usage
 - Change working directory to report-generator: `cd report-generator`
 - Build docker image using Dockerfile: `docker build -t <IMAGE_NAME> .`
-- Run docker image with bind mount to OneDrive: `docker run -it -v "<LOCAL_ONEDRIVE_PATH>:app/dbhc_onedrive" <IMAGE_NAME> [--extract | --generate]`
+- Run docker image with bind mount to OneDrive: `docker run -it -v "<LOCAL_ONEDRIVE_PATH>:/app/dbhc_onedrive" <IMAGE_NAME> [--extract | --generate]`
   - Use `--extract` to only generate extracted data files. Saves output files to `dbhc_extracted_data` folder.
     - When prompted, input the start and end date for the alert logs
   - Use `--generate` to only generate the html and pdf reports. Saves output files to `dbhc_reports` folder.
