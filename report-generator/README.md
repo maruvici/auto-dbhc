@@ -3,6 +3,7 @@ A Docker application that automatically generates Oracle Database Health Checkup
 
 ## Prerequisites
 - Docker Desktop / Docker Engine
+- Ensure generate_reports.sh uses LF rather than CRLF
 - OneDrive / Local path directory with the following structure:
 ```
 dbhc_onedrive/
